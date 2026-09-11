@@ -427,7 +427,10 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+<<<<<<< HEAD
 
 # Drake Asset Forge extras
 _smoke/
 *.DotSettings.user
+=======
+>>>>>>> 84b9397b8cdd9f4c20fed76a69274c645f9f886a

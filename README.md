@@ -1,6 +1,6 @@
 # Drakes Asset Forge
 
-Drakes Asset Forge is a tool for Valheim asset creation. **No asset ripping** — view Valheim SoftRef data and start making assets (clone donor → edit fields → attach FBX/PNG → export a Jotunn mod).
+Drakes Asset Forge is a powerful tool for Valheim asset creation. **No asset ripping** — just view Valheim SoftRef data and start making assets (clone donor → edit fields → attach FBX/PNG → export a Jotunn mod).
 
 Repo: [drakethos/DrakesAssetForge](https://github.com/drakethos/DrakesAssetForge)
 

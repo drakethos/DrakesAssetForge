@@ -1,0 +1,6 @@
+<Project>
+  <!-- Not a BepInEx/Jotunn game mod — skip suite Thunderstore/ModInfo targets. -->
+  <PropertyGroup>
+    <SkipDrakeModTargets>true</SkipDrakeModTargets>
+  </PropertyGroup>
+</Project>

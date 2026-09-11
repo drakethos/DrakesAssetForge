@@ -1,0 +1,108 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DrakeAssetForge.ViewModels"
+             x:Class="DrakeAssetForge.Views.CatalogBrowserView"
+             x:DataType="vm:MainViewModel">
+
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock FontWeight="SemiBold" Text="Catalog browser" VerticalAlignment="Center" />
+                <Button Grid.Column="1"
+                        Content="Toggle pins"
+                        Command="{Binding TogglePinsTrayCommand}" />
+            </Grid>
+
+            <UniformGrid Columns="6">
+                <Button Margin="0,0,4,4" Content="{Binding ItemsTabCount, StringFormat=Items ({0})}"
+                        Command="{Binding SetViewModeCommand}" CommandParameter="Items" />
+                <Button Margin="0,0,4,4" Content="{Binding PiecesTabCount, StringFormat=Pieces ({0})}"
+                        Command="{Binding SetViewModeCommand}" CommandParameter="Pieces" />
+                <Button Margin="0,0,4,4" Content="{Binding PrefabsTabCount, StringFormat=Prefabs ({0})}"
+                        Command="{Binding SetViewModeCommand}" CommandParameter="Prefabs" />
+                <Button Margin="0,0,4,4" Content="{Binding IconsTabCount, StringFormat=Icons ({0})}"
+                        Command="{Binding SetViewModeCommand}" CommandParameter="Icons" />
+                <Button Margin="0,0,4,4" Content="{Binding RecipesTabCount, StringFormat=Recipes ({0})}"
+                        Command="{Binding SetViewModeCommand}" CommandParameter="Recipes" />
+                <Button Margin="0,0,4,4" Content="{Binding RawTabCount, StringFormat=Raw ({0})}"
+                        Command="{Binding SetViewModeCommand}" CommandParameter="Raw" />
+            </UniformGrid>
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBox Grid.Column="0"
+                         PlaceholderText="Filter name / path / subcategory…"
+                         Text="{Binding AssetFilter}" />
+                <CheckBox Grid.Column="1"
+                          Content="Hide _res"
+                          IsChecked="{Binding HideResourceNoise}"
+                          VerticalAlignment="Center" />
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                <TextBlock Grid.Column="0" VerticalAlignment="Center" Text="Sub" />
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding SubCategories}"
+                          SelectedItem="{Binding SelectedSubCategory}" />
+                <TextBlock Grid.Column="2"
+                           VerticalAlignment="Center"
+                           Opacity="0.75"
+                           Text="{Binding VisibleCount, StringFormat={}{0}}" />
+            </Grid>
+
+            <StackPanel IsVisible="{Binding ShowPinsTray}" Spacing="4">
+                <TextBlock FontWeight="SemiBold" Opacity="0.8" Text="Pinned" />
+                <ListBox ItemsSource="{Binding Pins}"
+                         SelectedItem="{Binding SelectedPin}"
+                         MaxHeight="100"
+                         ContextRequested="OnPinsContextRequested">
+                    <ListBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Edit in Project"
+                                      Command="{Binding EditInProjectCommand}" />
+                            <MenuItem Header="Unpin"
+                                      Command="{Binding UnpinSelectedCommand}" />
+                            <Separator />
+                            <MenuItem Header="Open owning bundle"
+                                      Command="{Binding RevealSelectedAssetBundleCommand}" />
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </StackPanel>
+        </StackPanel>
+
+        <DataGrid ItemsSource="{Binding Assets}"
+                  SelectedItem="{Binding SelectedAsset}"
+                  IsReadOnly="True"
+                  CanUserResizeColumns="True"
+                  CanUserSortColumns="True"
+                  GridLinesVisibility="Horizontal"
+                  Margin="0,8,0,0"
+                  ContextRequested="OnCatalogGridContextRequested">
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Edit in Project"
+                              Command="{Binding EditInProjectCommand}"
+                              HotKey="Ctrl+E" />
+                    <MenuItem Header="Pin"
+                              Command="{Binding PinSelectedCommand}" />
+                    <MenuItem Header="Unpin"
+                              Command="{Binding UnpinSelectedCommand}" />
+                    <Separator />
+                    <MenuItem Header="Open owning bundle"
+                              Command="{Binding RevealSelectedAssetBundleCommand}" />
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="*" />
+                <DataGridTextColumn Header="Sub" Binding="{Binding SubCategory}" Width="100" />
+                <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="90" />
+                <DataGridTextColumn Header="Bundle" Binding="{Binding BundleId}" Width="80" />
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</UserControl>

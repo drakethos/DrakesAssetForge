@@ -1,0 +1,111 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:DrakeAssetForge.ViewModels"
+        xmlns:views="using:DrakeAssetForge.Views"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="860"
+        x:Class="DrakeAssetForge.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Width="1400"
+        Height="860"
+        Title="Drakes Asset Forge"
+        Opened="OnOpened">
+
+    <Design.DataContext>
+        <vm:MainViewModel />
+    </Design.DataContext>
+
+    <DockPanel>
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="Open Valheim Folder…" Click="OnOpenValheimFolderClick" />
+                <MenuItem Header="Reload SoftRef"
+                          Command="{Binding LoadValheimCommand}"
+                          IsEnabled="{Binding !IsBusy}" />
+                <Separator />
+                <MenuItem Header="E_xit" Click="OnExitClick" />
+            </MenuItem>
+        </Menu>
+
+        <!-- Top chrome -->
+        <Border DockPanel.Dock="Top"
+                Padding="12,10"
+                Background="#22000000"
+                BorderBrush="#44888888"
+                BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="Drakes Asset Forge" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Button Content="Catalog"
+                            Command="{Binding SetAppScreenCommand}" CommandParameter="Catalog" />
+                    <Button Content="Project"
+                            Command="{Binding SetAppScreenCommand}" CommandParameter="Project" />
+                    <Button Content="Export"
+                            Command="{Binding SetAppScreenCommand}" CommandParameter="Export" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ValheimPath}"
+                               Opacity="0.75"
+                               FontSize="12"
+                               MaxWidth="420"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" />
+                    <Border Padding="8,4" CornerRadius="4" Background="#33888888">
+                        <TextBlock Text="{Binding InspectorModeLabel}" FontSize="12" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Selection bar -->
+        <Border DockPanel.Dock="Top"
+                Padding="12,8"
+                BorderBrush="#44888888"
+                BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                <TextBlock Text="Selection" Opacity="0.7" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding SelectionLabel}"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                    <Button Content="Pin" Command="{Binding PinSelectedCommand}" />
+                    <Button Content="Unpin" Command="{Binding UnpinSelectedCommand}" />
+                    <Button Content="Edit in Project"
+                            Command="{Binding EditInProjectCommand}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TextBlock DockPanel.Dock="Bottom"
+                   Margin="12,6"
+                   Opacity="0.75"
+                   Text="{Binding StatusText}"
+                   TextWrapping="Wrap" />
+
+        <!-- Screens -->
+        <Panel Margin="12">
+            <views:CatalogWorkspaceView IsVisible="{Binding IsCatalogScreen}" DataContext="{Binding}" />
+
+            <views:ProjectWorkspaceView IsVisible="{Binding IsProjectScreen}" DataContext="{Binding}" />
+
+            <Border IsVisible="{Binding IsExportScreen}"
+                    BorderBrush="#44888888" BorderThickness="1" CornerRadius="6" Padding="16">
+                <StackPanel Spacing="10" MaxWidth="720">
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Export (stub)" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding ExportStubNote}" />
+                    <TextBlock TextWrapping="Wrap" Opacity="0.8"
+                               Text="Validate → Unity art compile → generate Jotunn C# mod. Wired after Project chunk." />
+                    <Button Content="Back to Catalog"
+                            HorizontalAlignment="Left"
+                            Command="{Binding SetAppScreenCommand}"
+                            CommandParameter="Catalog" />
+                </StackPanel>
+            </Border>
+        </Panel>
+    </DockPanel>
+</Window>

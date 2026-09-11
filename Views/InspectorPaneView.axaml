@@ -1,0 +1,279 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DrakeAssetForge.ViewModels"
+             xmlns:models="using:DrakeAssetForge.Models"
+             x:Class="DrakeAssetForge.Views.InspectorPaneView"
+             x:Name="InspectorRoot"
+             x:DataType="vm:MainViewModel">
+
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock FontWeight="SemiBold" Text="Inspector" VerticalAlignment="Center" />
+                <Border Grid.Column="1" Padding="8,4" CornerRadius="4" Background="#33888888">
+                    <TextBlock Text="{Binding InspectorModeLabel}" FontSize="12" />
+                </Border>
+            </Grid>
+
+            <Border IsVisible="{Binding IsInspectorReadOnly}"
+                    Padding="8" CornerRadius="4" Background="#220066aa">
+                <TextBlock TextWrapping="Wrap" FontSize="12"
+                           Text="Spy mode — SoftRef data is locked. Pin or Clone into Project to edit a working copy." />
+            </Border>
+
+            <Border IsVisible="{Binding !IsInspectorReadOnly}"
+                    Padding="8" CornerRadius="4" Background="#22006633">
+                <TextBlock TextWrapping="Wrap" FontSize="12"
+                           Text="Work mode — edits apply to the owned item.json. Click Save in the Project browser." />
+            </Border>
+
+            <WrapPanel>
+                <Button Margin="0,0,4,4" Content="Scripts"
+                        Command="{Binding SetInspectorSheetCommand}" CommandParameter="Scripts" />
+                <Button Margin="0,0,4,4" Content="Material"
+                        Command="{Binding SetInspectorSheetCommand}" CommandParameter="Material" />
+                <Button Margin="0,0,4,4" Content="Art"
+                        Command="{Binding SetInspectorSheetCommand}" CommandParameter="Art" />
+                <Button Margin="0,0,4,4" Content="Recipe"
+                        Command="{Binding SetInspectorSheetCommand}" CommandParameter="Recipe" />
+                <Button Margin="0,0,4,4" Content="Prefab"
+                        Command="{Binding SetInspectorSheetCommand}" CommandParameter="Prefab" />
+                <Button Margin="0,0,4,4" Content="Generated C#"
+                        Command="{Binding SetInspectorSheetCommand}" CommandParameter="Codegen" />
+            </WrapPanel>
+        </StackPanel>
+
+        <ScrollViewer Margin="0,8,0,0">
+            <StackPanel Spacing="6">
+                <!-- Prefab sheet: SoftRef metadata -->
+                <StackPanel IsVisible="{Binding IsSheetPrefab}" Spacing="6">
+                    <TextBlock Opacity="0.7" Text="Prefab / SoftRef (live)" />
+                    <TextBlock Text="{Binding SelectedAsset.DisplayName, StringFormat=Name: {0}}" />
+                    <TextBlock Text="{Binding SelectedAsset.Kind, StringFormat=Kind: {0}}" />
+                    <TextBlock Text="{Binding SelectedAsset.Category, StringFormat=Category: {0}}" />
+                    <TextBlock Text="{Binding SelectedAsset.SubCategory, StringFormat=Sub: {0}}" />
+                    <TextBlock Text="{Binding SelectedAsset.PathInBundle, StringFormat=Path: {0}}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding SelectedAsset.BundleId, StringFormat=Bundle: {0}}" />
+                    <TextBlock Text="{Binding SelectedAsset.AssetId, StringFormat=AssetId: {0}}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding ResolvedContainerPath, StringFormat=Container: {0}}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding ResolvedPathId, StringFormat=PathId: {0}}" />
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsSheetScripts}" Spacing="6">
+                    <TextBlock Opacity="0.7" Text="Valheim scripts (property spy)" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding ScriptsSpyStatus}" />
+                    <ListBox ItemsSource="{Binding SpyScripts}"
+                             SelectedItem="{Binding SelectedSpyScript}"
+                             MaxHeight="120">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:SpyScriptComponent">
+                                <TextBlock Text="{Binding DisplayLabel}" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock Margin="0,6,0,0" Opacity="0.7" Text="Properties" />
+                    <TreeView ItemsSource="{Binding ScriptPropertyTree}">
+                        <TreeView.Styles>
+                            <Style Selector="TreeViewItem" x:DataType="models:PropertyNode">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                <Setter Property="Padding" Value="0,1" />
+                            </Style>
+                        </TreeView.Styles>
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate ItemsSource="{Binding Children}"
+                                              x:DataType="models:PropertyNode">
+                                <Grid ColumnDefinitions="*,*" MinWidth="280" ColumnSpacing="8">
+                                    <TextBlock Text="{Binding Header}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1"
+                                             Text="{Binding Value}"
+                                             IsVisible="{Binding IsLeaf}"
+                                             IsReadOnly="{Binding #InspectorRoot.((vm:MainViewModel)DataContext).IsInspectorReadOnly}"
+                                             MinHeight="24"
+                                             Padding="4,2" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Value}"
+                                               IsVisible="{Binding IsGroup}"
+                                               Opacity="0.55"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsSheetMaterial}" Spacing="6">
+                    <TextBlock Opacity="0.7" Text="Material / Shader" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding MaterialStatus}" />
+                    <TextBlock TextWrapping="Wrap" Opacity="0.75" FontSize="12"
+                               Text="{Binding MaterialModeHint}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Rebuild shader catalog"
+                                Command="{Binding BuildShaderCatalogCommand}"
+                                IsEnabled="{Binding !IsShaderCatalogBusy}" />
+                        <TextBlock VerticalAlignment="Center" Opacity="0.65"
+                                   Text="{Binding ShaderCatalog.Count, StringFormat={}{0} shaders}" />
+                    </StackPanel>
+
+                    <CheckBox Content="Use donor materials (no Shader.Find override)"
+                              IsChecked="{Binding UseDonorMaterials}"
+                              IsVisible="{Binding CanEditMaterial}"
+                              IsEnabled="{Binding CanEditMaterial}" />
+
+                    <TextBox PlaceholderText="Filter shaders (e.g. Creature, Piece)…"
+                             Text="{Binding MaterialShaderFilter}" />
+                    <ListBox ItemsSource="{Binding FilteredShaders}"
+                             SelectedItem="{Binding SelectedShader}"
+                             MaxHeight="160">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:ShaderCatalogEntry">
+                                <TextBlock Text="{Binding ListLabel}" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <TextBlock Opacity="0.7" Text="Properties" />
+                    <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                               Text="In Catalog: schema browse only. After Clone: uncheck Donor to edit values → Save → material.json." />
+                    <ItemsControl ItemsSource="{Binding MaterialProperties}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="models:MaterialPropertyRow">
+                                <Grid ColumnDefinitions="0.9*,0.55*,*" Margin="0,2" ColumnSpacing="6">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Description}" Opacity="0.55" FontSize="11"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding KindLabel}"
+                                               Opacity="0.65"
+                                               VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="2"
+                                             Text="{Binding Value}"
+                                             IsVisible="{Binding IsColorOrFloat}"
+                                             IsReadOnly="{Binding #InspectorRoot.((vm:MainViewModel)DataContext).IsInspectorReadOnly}"
+                                             IsEnabled="{Binding #InspectorRoot.((vm:MainViewModel)DataContext).IsCustomMaterialMode}"
+                                             PlaceholderText="value" />
+                                    <TextBox Grid.Column="2"
+                                             Text="{Binding TextureRef}"
+                                             IsVisible="{Binding IsTexture}"
+                                             IsReadOnly="{Binding #InspectorRoot.((vm:MainViewModel)DataContext).IsInspectorReadOnly}"
+                                             IsEnabled="{Binding #InspectorRoot.((vm:MainViewModel)DataContext).IsCustomMaterialMode}"
+                                             PlaceholderText="PNG path / slot (art later)" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <TextBlock Opacity="0.6" FontSize="12" TextWrapping="Wrap"
+                               Text="Shaders are never packed into mods — only the Find name + your property values / PNGs." />
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsSheetArt}" Spacing="8">
+                    <TextBlock FontWeight="SemiBold" Text="Art import" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding ArtStatus}" />
+                    <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap"
+                               Text="Quick test: Browse Icon (PNG) → center Preview should show your file. Mesh/diffuse are path hooks for later Unity compile." />
+
+                    <Border IsVisible="{Binding !CanEditArt}"
+                            Padding="8" CornerRadius="4" Background="#22888888">
+                        <TextBlock TextWrapping="Wrap" FontSize="12"
+                                   Text="Spy mode — use Edit in Project on a Catalog item first, then come back here." />
+                    </Border>
+
+                    <StackPanel IsVisible="{Binding CanEditArt}" Spacing="10">
+                        <StackPanel Spacing="4">
+                            <TextBlock FontWeight="SemiBold" Text="Mesh (FBX)" />
+                            <TextBox Text="{Binding ArtMeshPath}"
+                                     PlaceholderText="art/mesh.fbx"
+                                     IsReadOnly="True" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Content="Browse…" Command="{Binding BrowseArtMeshCommand}" />
+                                <Button Content="Clear" Command="{Binding ClearArtMeshCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock FontWeight="SemiBold" Text="Icon (PNG) — visible in Preview" />
+                            <TextBox Text="{Binding ArtIconPath}"
+                                     PlaceholderText="art/icon.png"
+                                     IsReadOnly="True" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Content="Browse…" Command="{Binding BrowseArtIconCommand}" />
+                                <Button Content="Clear" Command="{Binding ClearArtIconCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock FontWeight="SemiBold" Text="Diffuse / albedo (PNG)" />
+                            <TextBox Text="{Binding ArtDiffusePath}"
+                                     PlaceholderText="art/diffuse.png"
+                                     IsReadOnly="True" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button Content="Browse…" Command="{Binding BrowseArtDiffuseCommand}" />
+                                <Button Content="Clear" Command="{Binding ClearArtDiffuseCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Button Content="Open item folder on disk"
+                                HorizontalAlignment="Left"
+                                Command="{Binding RevealOwnedItemFolderCommand}" />
+
+                        <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                                   Text="Browse auto-saves art.json into the item folder. Look for art/mesh.fbx, art/icon.png beside item.json." />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsSheetRecipe}" Spacing="6">
+                    <TextBlock Opacity="0.7" Text="Recipe (SoftRef spy)" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding RecipeSpyStatus}" />
+                    <TreeView ItemsSource="{Binding RecipePropertyTree}">
+                        <TreeView.Styles>
+                            <Style Selector="TreeViewItem" x:DataType="models:PropertyNode">
+                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                <Setter Property="Padding" Value="0,1" />
+                            </Style>
+                        </TreeView.Styles>
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate ItemsSource="{Binding Children}"
+                                              x:DataType="models:PropertyNode">
+                                <Grid ColumnDefinitions="*,*" MinWidth="280" ColumnSpacing="8">
+                                    <TextBlock Text="{Binding Header}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Value}"
+                                               Opacity="0.85"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                    <TextBlock Margin="0,8,0,0" Opacity="0.7" Text="Requirements" />
+                    <ItemsControl ItemsSource="{Binding RecipeRequirements}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="models:RecipeRequirementRow">
+                                <StackPanel Margin="0,1">
+                                    <TextBlock Text="{Binding Display}" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding Token}" Opacity="0.55" FontSize="11" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel IsVisible="{Binding IsSheetCodegen}" Spacing="6">
+                    <TextBlock Opacity="0.7" Text="Generated C#" />
+                    <Border Padding="10" CornerRadius="4" Background="#22888888">
+                        <TextBlock FontFamily="Consolas,Cascadia Mono,monospace" FontSize="11"
+                                   Text="// spy mode — nothing to generate&#x0a;// Clone into Project first" />
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

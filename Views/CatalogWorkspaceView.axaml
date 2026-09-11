@@ -1,0 +1,19 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DrakeAssetForge.ViewModels"
+             xmlns:views="using:DrakeAssetForge.Views"
+             x:Class="DrakeAssetForge.Views.CatalogWorkspaceView"
+             x:DataType="vm:MainViewModel">
+
+    <Grid ColumnDefinitions="1.15*,8,1*,8,1.15*">
+        <Border Grid.Column="0" BorderBrush="#44888888" BorderThickness="1" CornerRadius="6" Padding="10">
+            <views:CatalogBrowserView DataContext="{Binding}" />
+        </Border>
+        <Border Grid.Column="2" BorderBrush="#44888888" BorderThickness="1" CornerRadius="6" Padding="10">
+            <views:PreviewPaneView DataContext="{Binding}" />
+        </Border>
+        <Border Grid.Column="4" BorderBrush="#44888888" BorderThickness="1" CornerRadius="6" Padding="10">
+            <views:InspectorPaneView DataContext="{Binding}" />
+        </Border>
+    </Grid>
+</UserControl>

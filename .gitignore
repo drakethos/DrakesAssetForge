@@ -431,4 +431,8 @@ FodyWeavers.xsd
 # Drake Asset Forge extras
 _smoke/
 *.DotSettings.user
+UnityTemplate/Library/
+UnityTemplate/Temp/
+UnityTemplate/Logs/
+UnityTemplate/UserSettings/
 

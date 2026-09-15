@@ -73,14 +73,31 @@ Spy in Catalog → Pin/select donor → Clone → Project work → Export
 
 ## Phase C — Runtime proof + Export
 
-### C1 — In-game smoke (was Chunk 4)
-- Hand/minimal Jotunn mod: clone + Shader.Find + texture
+### C1 — In-game smoke (done)
+- Plugin `Smoke/DrakesAssetForgeSmoke` reads `%LocalAppData%/DrakeAssetForge/Projects/Default/Items`
+- Jotunn clone of donor prefab; icon PNG if attached
+- Custom material: `Shader.Find` + PNG texture stamps (no Valheim shader bytes, no AssetBundle)
+- Donor material mode leaves vanilla materials
+- Build deploys to `drakeTest` plugins when `environment.props` is present
 
-### C2 — Silent Unity art bundle (was Chunk 5)
-- FBX/PNG → art-only AssetBundle
+**Test:** Clone SwordIron → Art icon and/or Material Custom + diffuse PNG → build Smoke → launch Valheim → `spawn <item id>` → icon/material show in inventory and world. Log lists registered ids.
+
+### C2 — Silent Unity art bundle (done)
+- `UnityTemplate` editor script packs **only** the item FBX + diffuse PNG (`Unlit` placeholder, no Valheim shaders)
+- Export screen runs Unity batchmode; writes `art.bundle` beside `item.json`
+- Prefers an editor that matches Valheim's `boot.config` version; warns if only a nearby Unity 6 is installed
+- Bundle main asset is a prefab named `art` (imported model saved as a prefab, not the raw FBX). No Valheim scripts or shaders
+- Smoke plugin loads prefab `art` and parents it on the clone, hiding the donor renderers
+
+**Test:** Project item with an FBX → Export → Compile art bundle → `art.bundle` appears → rebuild smoke → `spawn <id>` uses the custom mesh.
 
 ### C3 — Full export (was Chunk 6)
 - Generate Jotunn mod folder (C# + bundle + csproj)
+
+### C2b — Project open/save + bundle import + optional art (done)
+- File → New / Open / Save Project As (folder + `project.json`); Export/Import `.daf` zip
+- Import Asset Bundle(s) / Mod Items folder → owned items (skip SoftRef vanilla names); opaque `art.bundle` round-trip; fat bundles → Extract via Unity
+- Sync always ships `item.json`; `ArtItemLoader` registers without requiring `art.bundle`
 
 ## Explicit non-goals until noted
 
@@ -89,4 +106,5 @@ Spy in Catalog → Pin/select donor → Clone → Project work → Export
 - Packing vanilla assets into mods
 - Mock_\* as default pipeline
 - Full 3D model preview in Catalog (mesh vert stats only today — optional later chunk)
+- Owned-item **FBX orbit preview** in the Project preview pane is in (Assimp, no Unity). Catalog SoftRef meshes are still not a 3D view.
 - Material/shaders tab **look preview** (needs materials + 3D preview first — note under B2)

@@ -40,6 +40,48 @@ public static class SoftRefPreviewService
         }
     }
 
+    /// <summary>Decode a Texture2D from a bundle to PNG bytes (for import). Returns null on failure.</summary>
+    public static byte[]? TryExportTexturePng(string bundlePath, long pathId)
+    {
+        var am = new AssetsManager();
+        try
+        {
+            var afileInst = OpenFirstAssetsFile(am, bundlePath);
+            if (afileInst == null)
+                return null;
+
+            var info = afileInst.file.GetAssetInfo(pathId);
+            if (info == null)
+                return null;
+
+            var bf = am.GetBaseField(afileInst, info);
+            var texture = TextureFile.ReadTextureFile(bf);
+            if (texture.m_Width <= 0 || texture.m_Height <= 0 || texture.m_Width > 1024 || texture.m_Height > 1024)
+                return null;
+
+            var encData = texture.FillPictureData(afileInst);
+            if (encData == null || encData.Length == 0)
+                return null;
+
+            var bgra = texture.DecodeTextureRaw(encData);
+            if (bgra == null || bgra.Length == 0)
+                return null;
+
+            TextureOperations.FlipBGRA32Vertically(bgra, texture.m_Width, texture.m_Height);
+            using var ms = new MemoryStream();
+            TextureOperations.WriteRawImage(bgra, texture.m_Width, texture.m_Height, ms, ImageExportType.Png, 100);
+            return ms.ToArray();
+        }
+        catch
+        {
+            return null;
+        }
+        finally
+        {
+            am.UnloadAll();
+        }
+    }
+
     public static SoftRefPreviewResult PreviewTextureByContainerPath(string bundlePath, string pathInBundle)
     {
         var entry = BundleAssetLister.FindContainerEntry(bundlePath, pathInBundle);

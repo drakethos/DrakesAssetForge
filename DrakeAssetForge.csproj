@@ -1,14 +1,28 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\assetforge.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <!-- Smoke is a net481 BepInEx plugin in its own project. SDK default globs would compile it into this app. -->
+    <Compile Remove="Smoke\**" />
+    <Compile Remove="UnityTemplate\**" />
+    <EmbeddedResource Remove="Smoke\**" />
+    <EmbeddedResource Remove="UnityTemplate\**" />
+    <None Remove="Smoke\**" />
+    <None Remove="UnityTemplate\**" />
+    <Content Remove="Smoke\**" />
+    <Content Remove="UnityTemplate\**" />
+    <AvaloniaResource Remove="Smoke\**" />
+    <AvaloniaResource Remove="UnityTemplate\**" />
+    <AvaloniaXaml Remove="Smoke\**" />
+    <AvaloniaXaml Remove="UnityTemplate\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,6 +40,8 @@
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="AssimpNetter" Version="6.0.4" />
+    <PackageReference Include="StbImageSharp" Version="2.30.15" />
     <PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
   </ItemGroup>
 </Project>

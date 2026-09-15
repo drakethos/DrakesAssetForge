@@ -13,12 +13,17 @@ public partial class CatalogBrowserView : UserControl
         InitializeComponent();
     }
 
+    private void OnCatalogLoadingRow(object? sender, DataGridRowEventArgs e)
+    {
+        if (DataContext is MainViewModel vm && e.Row.DataContext is SoftRefAssetEntry asset)
+            vm.RequestCatalogThumbnail(asset);
+    }
+
     private void OnCatalogGridContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (DataContext is not MainViewModel vm || sender is not DataGrid)
             return;
 
-        // Right-click should target the row under the pointer, not only the prior selection.
         if (e.Source is Control source)
         {
             var row = source.FindAncestorOfType<DataGridRow>();
@@ -39,5 +44,6 @@ public partial class CatalogBrowserView : UserControl
 
         vm.SelectedPin = item;
         vm.SelectedAsset = item;
+        vm.RequestCatalogThumbnail(item);
     }
 }

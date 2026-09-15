@@ -14,6 +14,7 @@ public enum MaterialAuthoringMode
 {
     Donor,
     Custom,
+    Existing,
 }
 
 public sealed class ShaderPropertySchema
@@ -45,6 +46,13 @@ public sealed class ShaderCatalogDocument
     public List<ShaderCatalogEntry> Shaders { get; set; } = new();
 }
 
+public sealed class CatalogMaterialChoice
+{
+    public required string Name { get; init; }
+    public string Path { get; init; } = "";
+    public string Label => string.IsNullOrWhiteSpace(Path) ? Name : $"{Name}  ({Path})";
+}
+
 public sealed class MaterialPropertyValue
 {
     public string Name { get; set; } = "";
@@ -60,5 +68,8 @@ public sealed class MaterialDocument
     public string ShaderName { get; set; } = "";
     public string? SeededFromSoftRefMaterial { get; set; }
     public List<MaterialPropertyValue> Properties { get; set; } = new();
+
+    /// <summary>Vanilla material names, one per renderer slot. A single name is applied to every slot.</summary>
+    public List<string> ExistingMaterials { get; set; } = new();
     public DateTimeOffset ModifiedUtc { get; set; }
 }

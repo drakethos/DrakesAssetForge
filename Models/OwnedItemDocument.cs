@@ -19,6 +19,10 @@ public sealed class OwnedItemDocument
     [JsonIgnore]
     public string DocumentPath { get; set; } = "";
 
+    /// <summary>Relative group under Items/ (e.g. Keys). Empty means the project root.</summary>
+    [JsonIgnore]
+    public string GroupPath { get; set; } = "";
+
     /// <summary>Populated when loading from disk (art.json).</summary>
     [JsonIgnore]
     public bool HasMeshArt { get; set; }
@@ -30,15 +34,26 @@ public sealed class OwnedItemDocument
     public bool HasDiffuseArt { get; set; }
 
     [JsonIgnore]
+    public bool HasCompiledArt { get; set; }
+
+    [JsonIgnore]
+    public bool NeedsBundleExtract { get; set; }
+
+    [JsonIgnore]
+    public bool IncludeInExport { get; set; } = true;
+
+    [JsonIgnore]
     public string ArtBadge =>
-        (HasMeshArt ? "mesh " : "") +
+        (IncludeInExport ? "" : "export:out ") +
+        (HasMeshArt ? (HasCompiledArt ? "mesh " : "mesh(needs compile) ") : "") +
+        (NeedsBundleExtract ? "bundle(needs extract) " : (!HasMeshArt && HasCompiledArt ? "bundle " : "")) +
         (HasIconArt ? "icon " : "") +
         (HasDiffuseArt ? "diffuse" : "");
 
     [JsonIgnore]
     public string ArtBadgeDisplay =>
         string.IsNullOrWhiteSpace(ArtBadge)
-            ? "art: none — use Inspector → Art"
+            ? "art: none — scripts/properties only (art optional)"
             : $"art: {ArtBadge.Trim()}";
 }
 

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:DrakeAssetForge.ViewModels"
+             xmlns:views="using:DrakeAssetForge.Views"
              x:Class="DrakeAssetForge.Views.PreviewPaneView"
              x:DataType="vm:MainViewModel">
 
@@ -13,18 +14,22 @@
                         Command="{Binding RefreshPreviewCommand}" />
             </Grid>
 
-            <Border Height="220"
+            <Border Height="340"
                     CornerRadius="6"
                     Background="#22888888"
                     HorizontalAlignment="Stretch"
                     ClipToBounds="True">
                 <Panel>
+                    <views:MeshOrbitView MeshPath="{Binding MeshPreviewPath}"
+                                         DiffusePath="{Binding MeshDiffusePath}"
+                                         IsVisible="{Binding HasMeshPreview}" />
                     <Image Source="{Binding PreviewBitmap}"
-                           IsVisible="{Binding HasPreviewImage}"
+                           IsVisible="{Binding ShowIconPreview}"
                            Stretch="Uniform"
                            Margin="8" />
                     <TextBlock Text="{Binding PreviewCaption}"
-                               IsVisible="{Binding !HasPreviewImage}"
+                               IsVisible="{Binding ShowPreviewPlaceholder}"
+                               IsHitTestVisible="False"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"
                                TextWrapping="Wrap"

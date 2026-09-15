@@ -3,43 +3,106 @@
              xmlns:vm="using:DrakeAssetForge.ViewModels"
              xmlns:models="using:DrakeAssetForge.Models"
              x:Class="DrakeAssetForge.Views.ProjectBrowserView"
-             x:DataType="vm:MainViewModel">
+             x:Name="ProjectBrowserRoot"
+             x:DataType="vm:MainViewModel"
+             Focusable="True"
+             KeyDown="OnBrowserKeyDown">
 
     <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Spacing="8">
-            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
-                <TextBlock FontWeight="SemiBold" Text="Project items" VerticalAlignment="Center" />
+                <StackPanel DockPanel.Dock="Top" Spacing="6">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                <TextBlock FontWeight="SemiBold" Text="Project" VerticalAlignment="Center" />
                 <Button Grid.Column="1"
-                        Content="Open folder"
-                        Command="{Binding RevealOwnedItemFolderCommand}"
-                        IsEnabled="{Binding HasOwnedSelection}" />
+                        Content="New group"
+                        Command="{Binding NewProjectGroupCommand}"
+                        ToolTip.Tip="Create a folder to group items." />
                 <Button Grid.Column="2"
+                        Content="Extract pending"
+                        Command="{Binding ExtractImportedBundlesCommand}"
+                        IsEnabled="{Binding !IsBusy}"
+                        ToolTip.Tip="Run Unity extract for every item marked bundle(needs extract)." />
+                <Button Grid.Column="3"
                         Content="Save"
                         Command="{Binding SaveOwnedItemCommand}"
                         IsEnabled="{Binding HasOwnedSelection}" />
             </Grid>
             <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
                        Text="{Binding ProjectPathLabel}" />
-            <Border Padding="8" CornerRadius="4" Background="#22006633">
-                <TextBlock FontSize="12" TextWrapping="Wrap"
-                           Text="Test Art: select an item → Inspector tab Art → Browse an icon PNG. Preview should swap off the SoftRef donor. Mesh/diffuse attach the same way (compile later)." />
-            </Border>
+            <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                       Text="Ctrl+click / Shift+click to multi-select (plain drag moves). Drop on a group or Right-click → Move to…  Ctrl+C/X/V · F2 · Del" />
         </StackPanel>
 
-        <ListBox Margin="0,8,0,0"
-                 ItemsSource="{Binding OwnedItems}"
-                 SelectedItem="{Binding SelectedOwnedItem}">
-            <ListBox.ItemTemplate>
-                <DataTemplate x:DataType="models:OwnedItemDocument">
-                    <StackPanel Spacing="2" Margin="0,4">
-                        <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                        <TextBlock Opacity="0.65" FontSize="11"
-                                   Text="{Binding Donor.PrefabName, StringFormat=donor: {0}}" />
-                        <TextBlock Opacity="0.8" FontSize="11"
-                                   Text="{Binding ArtBadgeDisplay}" />
-                    </StackPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+        <TreeView Margin="0,8,0,0"
+                  x:Name="ProjectTree"
+                  ItemsSource="{Binding ProjectTree}">
+            <TreeView.ContextMenu>
+                <ContextMenu Opening="OnContextMenuOpening">
+                    <MenuItem Header="New group" Command="{Binding NewProjectGroupCommand}" />
+                    <Separator />
+                    <MenuItem Header="Rename" InputGesture="F2" Command="{Binding BeginRenameProjectNodeCommand}" />
+                    <MenuItem x:Name="DuplicateMenu" Header="Duplicate" InputGesture="Ctrl+D" Command="{Binding DuplicateOwnedItemCommand}" />
+                    <MenuItem x:Name="CopyMenu" Header="Copy" InputGesture="Ctrl+C" Command="{Binding CopySelectedProjectItemsCommand}" />
+                    <MenuItem x:Name="CutMenu" Header="Cut" InputGesture="Ctrl+X" Command="{Binding CutSelectedProjectItemsCommand}" />
+                    <MenuItem x:Name="PasteMenu" Header="Paste" InputGesture="Ctrl+V" Command="{Binding PasteProjectItemsCommand}" />
+                    <MenuItem x:Name="MoveToMenu" Header="Move to" />
+                    <MenuItem Header="Delete" InputGesture="Delete" Command="{Binding DeleteProjectSelectionCommand}" />
+                    <Separator />
+                    <MenuItem x:Name="ExtractMenu" Header="Extract art bundle…" Command="{Binding ExtractSelectedBundleCommand}" />
+                    <MenuItem Header="Extract all pending…" Command="{Binding ExtractImportedBundlesCommand}" />
+                    <Separator />
+                    <MenuItem Header="Open in Explorer" Command="{Binding RevealProjectSelectionCommand}" />
+                </ContextMenu>
+            </TreeView.ContextMenu>
+            <TreeView.Styles>
+                <Style Selector="TreeViewItem" x:DataType="models:ProjectTreeNode">
+                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                    <Setter Property="Padding" Value="2,3" />
+                </Style>
+            </TreeView.Styles>
+            <TreeView.ItemTemplate>
+                <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="models:ProjectTreeNode">
+                    <Border Background="{Binding DropTargetBrush}"
+                            CornerRadius="4"
+                            Padding="2,1"
+                            MinHeight="28">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <Border Width="22" Height="22"
+                                    CornerRadius="3"
+                                    Background="#33888888"
+                                    ClipToBounds="True"
+                                    VerticalAlignment="Center">
+                                <Panel>
+                                    <Border IsVisible="{Binding IsFolder}"
+                                            Background="#55A0783C"
+                                            CornerRadius="2"
+                                            Margin="3" />
+                                    <Image Source="{Binding Thumbnail}"
+                                           Stretch="Uniform"
+                                           IsVisible="{Binding IsItem}" />
+                                </Panel>
+                            </Border>
+                            <Panel Grid.Column="1">
+                                <StackPanel IsVisible="{Binding !IsEditing}" Spacing="0">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Subtitle}"
+                                               Opacity="0.55"
+                                               FontSize="11"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <TextBox Classes="rename-box"
+                                         IsVisible="{Binding IsEditing}"
+                                         Text="{Binding EditName, Mode=TwoWay}"
+                                         MinHeight="26"
+                                         Padding="4,2"
+                                         KeyDown="OnRenameBoxKeyDown"
+                                         LostFocus="OnRenameBoxLostFocus" />
+                            </Panel>
+                        </Grid>
+                    </Border>
+                </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
     </DockPanel>
 </UserControl>

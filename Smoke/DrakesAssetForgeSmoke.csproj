@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net481</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <SkipDrakeModTargets>true</SkipDrakeModTargets>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <!-- Suite checkout: paths from workspace environment.props. Standalone clone can copy one beside this project. -->
+  <Import Project="$(MSBuildThisFileDirectory)..\..\environment.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\environment.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)environment.props" Condition="Exists('$(MSBuildThisFileDirectory)environment.props')" />
+
+  <ItemGroup>
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExPath)\core\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Jotunn">
+      <HintPath>$(BepInExPath)\plugins\ValheimModding-Jotunn\Jotunn.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(CorlibPath)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="assembly_valheim">
+      <HintPath>$(PublicizedAssembliesPath)\assembly_valheim_publicized.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(CorlibPath)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(CorlibPath)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="DeploySmokePlugin" AfterTargets="Build" Condition="'$(BepInExPath)' != '' and Exists('$(BepInExPath)')">
+    <MakeDir Directories="$(BepInExPath)\plugins\DrakesAssetForgeSmoke" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExPath)\plugins\DrakesAssetForgeSmoke" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Deployed DrakesAssetForgeSmoke to $(BepInExPath)\plugins\DrakesAssetForgeSmoke" />
+  </Target>
+</Project>

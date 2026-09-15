@@ -29,6 +29,50 @@ public sealed class ProjectStore
             "Projects",
             "Default");
 
+    public string? TryLoadValheimProjectPath()
+    {
+        var marker = Path.Combine(ProjectRoot, "project.json");
+        if (!File.Exists(marker))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(marker));
+            return doc.RootElement.TryGetProperty("valheimProjectPath", out var path) ? path.GetString() : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public void SaveValheimProjectPath(string path)
+    {
+        EnsureCreated();
+        var marker = Path.Combine(ProjectRoot, "project.json");
+        var name = "Default";
+        var schema = 1;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(marker));
+            if (doc.RootElement.TryGetProperty("name", out var n) && n.GetString() is { Length: > 0 } existing)
+                name = existing;
+            if (doc.RootElement.TryGetProperty("schemaVersion", out var s) && s.TryGetInt32(out var v))
+                schema = v;
+        }
+        catch
+        {
+            // Rewrite a minimal marker.
+        }
+
+        var json = JsonSerializer.Serialize(new
+        {
+            name,
+            schemaVersion = schema,
+            valheimProjectPath = path,
+        }, JsonOptions);
+        File.WriteAllText(marker, json);
+    }
+
     public void EnsureCreated()
     {
         Directory.CreateDirectory(ItemsRoot);
@@ -51,26 +95,63 @@ public sealed class ProjectStore
         if (!Directory.Exists(ItemsRoot))
             return results;
 
+        CollectItems(ItemsRoot, "", results);
+        return results
+            .OrderBy(d => d.GroupPath, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(d => d.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public IReadOnlyList<string> ListGroups()
+    {
+        EnsureCreated();
+        var groups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!Directory.Exists(ItemsRoot))
+            return Array.Empty<string>();
+
         foreach (var dir in Directory.EnumerateDirectories(ItemsRoot))
         {
-            var docPath = Path.Combine(dir, "item.json");
-            if (!File.Exists(docPath))
+            if (File.Exists(Path.Combine(dir, "item.json")))
                 continue;
-            try
-            {
-                var doc = LoadItem(docPath);
-                if (doc != null)
-                    results.Add(doc);
-            }
-            catch
-            {
-                // skip corrupt
-            }
+            groups.Add(Path.GetFileName(dir));
         }
 
-        return results
-            .OrderBy(d => d.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        foreach (var item in LoadAllItems())
+        {
+            if (!string.IsNullOrWhiteSpace(item.GroupPath))
+                groups.Add(item.GroupPath.Split('/', '\\')[0]);
+        }
+
+        return groups.OrderBy(g => g, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private void CollectItems(string directory, string groupPath, List<OwnedItemDocument> results)
+    {
+        foreach (var dir in Directory.EnumerateDirectories(directory))
+        {
+            var docPath = Path.Combine(dir, "item.json");
+            if (File.Exists(docPath))
+            {
+                try
+                {
+                    var doc = LoadItem(docPath);
+                    if (doc == null)
+                        continue;
+                    doc.GroupPath = groupPath;
+                    results.Add(doc);
+                }
+                catch
+                {
+                    // skip corrupt
+                }
+
+                continue;
+            }
+
+            var name = Path.GetFileName(dir);
+            var childGroup = string.IsNullOrEmpty(groupPath) ? name : groupPath + "/" + name;
+            CollectItems(dir, childGroup, results);
+        }
     }
 
     public OwnedItemDocument? LoadItem(string documentPath)
@@ -95,6 +176,114 @@ public sealed class ProjectStore
                          ResolveArtAbsolutePath(doc, art.IconPath) != null;
         doc.HasDiffuseArt = !string.IsNullOrWhiteSpace(art.DiffusePath) &&
                             ResolveArtAbsolutePath(doc, art.DiffusePath) != null;
+        doc.HasCompiledArt = File.Exists(Path.Combine(doc.FolderPath, "art.bundle"));
+        doc.NeedsBundleExtract = art.NeedsBundleExtract && !doc.HasCompiledArt;
+        doc.IncludeInExport = art.IncludeInExport;
+    }
+
+    public string ImportsRoot => Path.Combine(ProjectRoot, "Imports");
+
+    /// <summary>Copies a source Unity bundle into Imports/ and returns a project-relative path.</summary>
+    public string ImportSourceBundle(string sourceBundlePath)
+    {
+        if (!File.Exists(sourceBundlePath))
+            throw new FileNotFoundException("Bundle not found.", sourceBundlePath);
+
+        Directory.CreateDirectory(ImportsRoot);
+        var name = SanitizeId(Path.GetFileNameWithoutExtension(sourceBundlePath));
+        if (string.IsNullOrEmpty(name))
+            name = "bundle";
+        var destName = name + Path.GetExtension(sourceBundlePath);
+        if (string.IsNullOrEmpty(Path.GetExtension(destName)))
+            destName += ".bundle";
+        var dest = Path.Combine(ImportsRoot, destName);
+        var n = 2;
+        while (File.Exists(dest) && !FilesEqual(sourceBundlePath, dest))
+        {
+            destName = $"{name}_{n}{Path.GetExtension(destName)}";
+            dest = Path.Combine(ImportsRoot, destName);
+            n++;
+        }
+
+        if (!File.Exists(dest))
+            File.Copy(sourceBundlePath, dest, overwrite: false);
+        return Path.Combine("Imports", Path.GetFileName(dest)).Replace('\\', '/');
+    }
+
+    public string? ResolveProjectRelativePath(string? relative)
+    {
+        if (string.IsNullOrWhiteSpace(relative))
+            return null;
+        if (Path.IsPathRooted(relative))
+            return File.Exists(relative) ? relative : null;
+        var full = Path.GetFullPath(Path.Combine(ProjectRoot, relative.Replace('/', Path.DirectorySeparatorChar)));
+        return File.Exists(full) ? full : null;
+    }
+
+    /// <summary>Creates an owned item folder (scripts optional). Used by bundle / mod imports.</summary>
+    public OwnedItemDocument CreateImportedItem(
+        string preferredId,
+        string displayName,
+        string donorPrefabName,
+        string? preferredGroup = null,
+        Dictionary<string, string>? fields = null,
+        List<OwnedScriptSeed>? scripts = null)
+    {
+        EnsureCreated();
+        var baseId = SanitizeId(preferredId);
+        if (string.IsNullOrEmpty(baseId))
+            baseId = "Imported_Item";
+        var id = EnsureUniqueId(baseId);
+        var group = SanitizeGroupPath(preferredGroup);
+        var folder = string.IsNullOrEmpty(group)
+            ? Path.Combine(ItemsRoot, id)
+            : Path.Combine(ItemsRoot, group.Replace('/', Path.DirectorySeparatorChar), id);
+        Directory.CreateDirectory(folder);
+
+        var now = DateTimeOffset.UtcNow;
+        var doc = new OwnedItemDocument
+        {
+            Id = id,
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? id : displayName.Trim(),
+            Donor = new DonorRef
+            {
+                PrefabName = string.IsNullOrWhiteSpace(donorPrefabName) ? "LeatherScraps" : donorPrefabName.Trim(),
+                Kind = "Imported",
+            },
+            Scripts = scripts ?? new List<OwnedScriptSeed>(),
+            Fields = fields ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            CreatedUtc = now,
+            ModifiedUtc = now,
+            FolderPath = folder,
+            DocumentPath = Path.Combine(folder, "item.json"),
+            GroupPath = group,
+        };
+        if (!doc.Fields.ContainsKey("prefab"))
+            doc.Fields["prefab"] = id;
+
+        SaveItem(doc);
+        SaveMaterial(doc, new MaterialDocument
+        {
+            Mode = MaterialAuthoringMode.Donor,
+            ShaderName = "",
+            ModifiedUtc = now,
+        });
+        SaveArt(doc, new ArtDocument { PrefabName = id, ModifiedUtc = now });
+        return doc;
+    }
+
+    private static bool FilesEqual(string a, string b)
+    {
+        try
+        {
+            var fa = new FileInfo(a);
+            var fb = new FileInfo(b);
+            return fa.Length == fb.Length;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public OwnedItemDocument CloneFromSpy(
@@ -102,13 +291,17 @@ public sealed class ProjectStore
         PrefabPropertySpyResult prefabSpy,
         AssetPropertySpyResult? recipeSpy,
         IReadOnlyList<RecipeRequirementRow>? recipeRequirements,
-        string? preferredId = null)
+        string? preferredId = null,
+        string? preferredGroup = null)
     {
         EnsureCreated();
 
         var baseId = SanitizeId(preferredId ?? $"Custom_{donor.DisplayName}");
         var id = EnsureUniqueId(baseId);
-        var folder = Path.Combine(ItemsRoot, id);
+        var group = SanitizeGroupPath(preferredGroup);
+        var folder = string.IsNullOrEmpty(group)
+            ? Path.Combine(ItemsRoot, id)
+            : Path.Combine(ItemsRoot, group.Replace('/', Path.DirectorySeparatorChar), id);
         Directory.CreateDirectory(folder);
 
         var now = DateTimeOffset.UtcNow;
@@ -156,6 +349,7 @@ public sealed class ProjectStore
             ModifiedUtc = now,
             FolderPath = folder,
             DocumentPath = Path.Combine(folder, "item.json"),
+            GroupPath = group,
         };
 
         if (recipeSpy != null && recipeSpy.Error == null)
@@ -201,17 +395,21 @@ public sealed class ProjectStore
     {
         var path = GetArtPath(doc);
         if (!File.Exists(path))
-            return new ArtDocument { ModifiedUtc = DateTimeOffset.UtcNow };
+            return new ArtDocument { IncludeInExport = true, ModifiedUtc = DateTimeOffset.UtcNow };
 
         try
         {
             var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<ArtDocument>(json, JsonOptions)
-                   ?? new ArtDocument();
+            var art = JsonSerializer.Deserialize<ArtDocument>(json, JsonOptions)
+                      ?? new ArtDocument { IncludeInExport = true };
+            // Older art.json files omit the key; treat missing as included.
+            if (json.IndexOf("includeInExport", StringComparison.OrdinalIgnoreCase) < 0)
+                art.IncludeInExport = true;
+            return art;
         }
         catch
         {
-            return new ArtDocument();
+            return new ArtDocument { IncludeInExport = true };
         }
     }
 
@@ -289,6 +487,268 @@ public sealed class ProjectStore
         File.WriteAllText(GetMaterialPath(doc), JsonSerializer.Serialize(material, JsonOptions));
     }
 
+    public void DeleteItem(OwnedItemDocument doc)
+    {
+        if (string.IsNullOrWhiteSpace(doc.FolderPath) || !Directory.Exists(doc.FolderPath))
+            return;
+        Directory.Delete(doc.FolderPath, recursive: true);
+    }
+
+    public bool TryCreateGroup(string rawName, out string groupPath, out string error)
+    {
+        groupPath = SanitizeGroupPath(rawName);
+        error = "";
+        if (string.IsNullOrEmpty(groupPath))
+        {
+            error = "Enter a group name.";
+            return false;
+        }
+
+        if (groupPath.Contains('/'))
+        {
+            error = "One folder level for now.";
+            return false;
+        }
+
+        if (ItemIdExists(groupPath))
+        {
+            error = $"'{groupPath}' is already an item id.";
+            return false;
+        }
+
+        var folder = Path.Combine(ItemsRoot, groupPath);
+        if (Directory.Exists(folder))
+        {
+            error = $"Group '{groupPath}' already exists.";
+            return false;
+        }
+
+        Directory.CreateDirectory(folder);
+        return true;
+    }
+
+    public bool TryRenameGroup(string oldPath, string rawName, out string newPath, out string error)
+    {
+        newPath = SanitizeGroupPath(rawName);
+        error = "";
+        oldPath = SanitizeGroupPath(oldPath);
+        if (string.IsNullOrEmpty(oldPath) || string.IsNullOrEmpty(newPath))
+        {
+            error = "Group name is required.";
+            return false;
+        }
+
+        if (oldPath.Equals(newPath, StringComparison.OrdinalIgnoreCase))
+        {
+            newPath = oldPath;
+            return true;
+        }
+
+        var from = Path.Combine(ItemsRoot, oldPath.Replace('/', Path.DirectorySeparatorChar));
+        var to = Path.Combine(ItemsRoot, newPath.Replace('/', Path.DirectorySeparatorChar));
+        if (!Directory.Exists(from))
+        {
+            error = "Group folder is missing.";
+            return false;
+        }
+
+        if (Directory.Exists(to) || ItemIdExists(newPath))
+        {
+            error = $"'{newPath}' already exists.";
+            return false;
+        }
+
+        Directory.Move(from, to);
+        return true;
+    }
+
+    public bool TryDeleteGroup(string groupPath, bool deleteItems, out string error)
+    {
+        error = "";
+        groupPath = SanitizeGroupPath(groupPath);
+        if (string.IsNullOrEmpty(groupPath))
+        {
+            error = "Cannot delete the project root.";
+            return false;
+        }
+
+        var folder = Path.Combine(ItemsRoot, groupPath.Replace('/', Path.DirectorySeparatorChar));
+        if (!Directory.Exists(folder))
+            return true;
+
+        var items = LoadAllItems().Where(i => i.GroupPath.Equals(groupPath, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (items.Count > 0 && !deleteItems)
+        {
+            error = $"Group has {items.Count} item(s). Delete them first, or confirm deleting the whole group.";
+            return false;
+        }
+
+        Directory.Delete(folder, recursive: true);
+        return true;
+    }
+
+    public bool TryMoveItemToGroup(OwnedItemDocument doc, string? groupPath, out string error)
+    {
+        error = "";
+        groupPath = SanitizeGroupPath(groupPath);
+        var current = SanitizeGroupPath(doc.GroupPath);
+        if (current.Equals(groupPath, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.IsNullOrEmpty(groupPath))
+        {
+            var groupFolder = Path.Combine(ItemsRoot, groupPath.Replace('/', Path.DirectorySeparatorChar));
+            if (!Directory.Exists(groupFolder))
+                Directory.CreateDirectory(groupFolder);
+            if (File.Exists(Path.Combine(groupFolder, "item.json")))
+            {
+                error = $"'{groupPath}' is an item, not a group.";
+                return false;
+            }
+        }
+
+        var destParent = string.IsNullOrEmpty(groupPath)
+            ? ItemsRoot
+            : Path.Combine(ItemsRoot, groupPath.Replace('/', Path.DirectorySeparatorChar));
+        var dest = Path.Combine(destParent, doc.Id);
+        if (Directory.Exists(dest))
+        {
+            error = $"'{doc.Id}' already exists in that group.";
+            return false;
+        }
+
+        Directory.Move(doc.FolderPath, dest);
+        doc.FolderPath = dest;
+        doc.DocumentPath = Path.Combine(dest, "item.json");
+        doc.GroupPath = groupPath;
+        return true;
+    }
+
+    public bool TryDuplicateItem(
+        OwnedItemDocument source,
+        out OwnedItemDocument? copy,
+        out string error,
+        string? preferredGroup = null)
+    {
+        copy = null;
+        error = "";
+        if (string.IsNullOrWhiteSpace(source.FolderPath) || !Directory.Exists(source.FolderPath))
+        {
+            error = "Item folder is missing.";
+            return false;
+        }
+
+        var newId = EnsureUniqueId(source.Id + "_Copy");
+        var group = preferredGroup != null
+            ? SanitizeGroupPath(preferredGroup)
+            : SanitizeGroupPath(source.GroupPath);
+        var destParent = string.IsNullOrEmpty(group)
+            ? ItemsRoot
+            : Path.Combine(ItemsRoot, group.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(destParent);
+        var dest = Path.Combine(destParent, newId);
+        if (Directory.Exists(dest))
+        {
+            error = $"'{newId}' already exists.";
+            return false;
+        }
+
+        CopyDirectory(source.FolderPath, dest);
+        var docPath = Path.Combine(dest, "item.json");
+        copy = LoadItem(docPath);
+        if (copy == null)
+        {
+            error = "Duplicated folder, but item.json failed to load.";
+            return false;
+        }
+
+        var oldId = copy.Id;
+        copy.Id = newId;
+        copy.GroupPath = group;
+        if (string.IsNullOrWhiteSpace(copy.DisplayName) ||
+            copy.DisplayName.Equals(oldId, StringComparison.OrdinalIgnoreCase))
+            copy.DisplayName = newId;
+        if (copy.Fields.TryGetValue("prefab", out var prefab) &&
+            (string.IsNullOrWhiteSpace(prefab) || prefab.Equals(oldId, StringComparison.OrdinalIgnoreCase)))
+            copy.Fields["prefab"] = newId;
+
+        var art = LoadArt(copy);
+        if (string.IsNullOrWhiteSpace(art.PrefabName) ||
+            art.PrefabName.Equals(oldId, StringComparison.OrdinalIgnoreCase))
+            art.PrefabName = newId;
+        SaveArt(copy, art);
+        SaveItem(copy);
+        return true;
+    }
+
+    private static void CopyDirectory(string sourceDir, string destDir)
+    {
+        Directory.CreateDirectory(destDir);
+        foreach (var file in Directory.EnumerateFiles(sourceDir))
+            File.Copy(file, Path.Combine(destDir, Path.GetFileName(file)), overwrite: true);
+        foreach (var dir in Directory.EnumerateDirectories(sourceDir))
+            CopyDirectory(dir, Path.Combine(destDir, Path.GetFileName(dir)));
+    }
+
+    public bool TryRenameItem(OwnedItemDocument doc, string rawName, out string newId, out string error)
+    {
+        newId = SanitizeId(rawName);
+        error = "";
+        if (string.IsNullOrWhiteSpace(doc.FolderPath) || !Directory.Exists(doc.FolderPath))
+        {
+            error = "Item folder is missing.";
+            return false;
+        }
+
+        if (newId.Equals(doc.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            newId = doc.Id;
+            return true;
+        }
+
+        if (ItemIdExists(newId) || GroupExists(newId))
+        {
+            error = $"'{newId}' already exists in the project.";
+            return false;
+        }
+
+        var oldId = doc.Id;
+        var parent = Path.GetDirectoryName(doc.FolderPath)!;
+        var newFolder = Path.Combine(parent, newId);
+        Directory.Move(doc.FolderPath, newFolder);
+        doc.Id = newId;
+        doc.FolderPath = newFolder;
+        doc.DocumentPath = Path.Combine(newFolder, "item.json");
+        if (string.IsNullOrWhiteSpace(doc.DisplayName) ||
+            doc.DisplayName.Equals(oldId, StringComparison.OrdinalIgnoreCase))
+            doc.DisplayName = newId;
+        if (doc.Fields.TryGetValue("prefab", out var prefab) &&
+            prefab.Equals(oldId, StringComparison.OrdinalIgnoreCase))
+            doc.Fields["prefab"] = newId;
+
+        var art = LoadArt(doc);
+        if (string.IsNullOrWhiteSpace(art.PrefabName) ||
+            art.PrefabName.Equals(oldId, StringComparison.OrdinalIgnoreCase))
+        {
+            art.PrefabName = newId;
+            SaveArt(doc, art);
+        }
+
+        SaveItem(doc);
+        return true;
+    }
+
+    public void DeleteArtFile(OwnedItemDocument doc, string? storedPath)
+    {
+        var full = ResolveArtAbsolutePath(doc, storedPath);
+        if (full == null)
+            return;
+        var artRoot = Path.GetFullPath(GetArtAssetsFolder(doc));
+        if (!full.StartsWith(artRoot, StringComparison.OrdinalIgnoreCase))
+            return;
+        File.Delete(full);
+    }
+
     public void SaveItem(OwnedItemDocument doc)
     {
         if (string.IsNullOrWhiteSpace(doc.DocumentPath))
@@ -320,7 +780,7 @@ public sealed class ProjectStore
     {
         var id = baseId;
         var n = 2;
-        while (Directory.Exists(Path.Combine(ItemsRoot, id)))
+        while (ItemIdExists(id) || GroupExists(id))
         {
             id = $"{baseId}_{n}";
             n++;
@@ -329,7 +789,27 @@ public sealed class ProjectStore
         return id;
     }
 
-    private static string SanitizeId(string raw)
+    private bool ItemIdExists(string id) =>
+        LoadAllItems().Any(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+    private bool GroupExists(string name)
+    {
+        var folder = Path.Combine(ItemsRoot, name);
+        return Directory.Exists(folder) && !File.Exists(Path.Combine(folder, "item.json"));
+    }
+
+    public static string SanitizeGroupPath(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return "";
+        var parts = raw.Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(SanitizeId)
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        return string.Join("/", parts);
+    }
+
+    public static string SanitizeId(string raw)
     {
         var chars = raw.Trim()
             .Select(c => char.IsLetterOrDigit(c) || c is '_' or '-' ? c : '_')

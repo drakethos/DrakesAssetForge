@@ -2,12 +2,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:DrakeAssetForge.ViewModels"
         xmlns:views="using:DrakeAssetForge.Views"
+        xmlns:models="using:DrakeAssetForge.Models"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1400" d:DesignHeight="860"
         x:Class="DrakeAssetForge.Views.MainWindow"
         x:DataType="vm:MainViewModel"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/assetforge.ico"
         Width="1400"
         Height="860"
         Title="Drakes Asset Forge"
@@ -20,6 +21,18 @@
     <DockPanel>
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
+                <MenuItem Header="New Project…" Command="{Binding NewProjectCommand}" />
+                <MenuItem Header="Open Project…" Command="{Binding OpenProjectCommand}" />
+                <MenuItem Header="Save Project As…" Command="{Binding SaveProjectAsCommand}" />
+                <Separator />
+                <MenuItem Header="Export Project Package…" Command="{Binding ExportProjectPackageCommand}" />
+                <MenuItem Header="Import Project Package…" Command="{Binding ImportProjectPackageCommand}" />
+                <Separator />
+                <MenuItem Header="Import Asset Bundle…" Command="{Binding ImportAssetBundlesCommand}" IsEnabled="{Binding !IsBusy}" />
+                <MenuItem Header="Import Mod Assets Folder…" Command="{Binding ImportModAssetsFolderCommand}" IsEnabled="{Binding !IsBusy}" />
+                <MenuItem Header="Import Mod Items Folder…" Command="{Binding ImportModItemsFolderCommand}" IsEnabled="{Binding !IsBusy}" />
+                <MenuItem Header="Extract Imported Bundles…" Command="{Binding ExtractImportedBundlesCommand}" IsEnabled="{Binding !IsBusy}" />
+                <Separator />
                 <MenuItem Header="Open Valheim Folder…" Click="OnOpenValheimFolderClick" />
                 <MenuItem Header="Reload SoftRef"
                           Command="{Binding LoadValheimCommand}"
@@ -95,16 +108,83 @@
 
             <Border IsVisible="{Binding IsExportScreen}"
                     BorderBrush="#44888888" BorderThickness="1" CornerRadius="6" Padding="16">
-                <StackPanel Spacing="10" MaxWidth="720">
-                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Export (stub)" />
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="10" MaxWidth="960">
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Export to mod" />
                     <TextBlock TextWrapping="Wrap" Text="{Binding ExportStubNote}" />
-                    <TextBlock TextWrapping="Wrap" Opacity="0.8"
-                               Text="Validate → Unity art compile → generate Jotunn C# mod. Wired after Project chunk." />
-                    <Button Content="Back to Catalog"
+
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Text="Folders &amp; items" />
+                    <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                               Text="Grouped by Project folder. Check a folder to include everything in it, then uncheck individuals. Sync always ships item.json + hooks; art.bundle is copied when present (no FBX compile required)." />
+                    <TextBlock FontWeight="SemiBold" Text="{Binding ExportIncludeSummary}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Select all" Command="{Binding ExportSelectAllCommand}" />
+                        <Button Content="Select none" Command="{Binding ExportSelectNoneCommand}" />
+                        <Button Content="Use Project selection"
+                                Command="{Binding ExportIncludeProjectSelectionOnlyCommand}"
+                                ToolTip.Tip="Include only items currently multi-selected on the Project screen." />
+                    </StackPanel>
+                    <Border BorderBrush="#44888888" BorderThickness="1" CornerRadius="4" Padding="4" MinHeight="220" MaxHeight="420">
+                        <TreeView ItemsSource="{Binding ExportTree}">
+                            <TreeView.Styles>
+                                <Style Selector="TreeViewItem" x:DataType="models:ExportTreeNode">
+                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                    <Setter Property="Padding" Value="2,3" />
+                                </Style>
+                            </TreeView.Styles>
+                            <TreeView.ItemTemplate>
+                                <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="models:ExportTreeNode">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="2,1">
+                                        <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                  IsThreeState="{Binding IsFolder}"
+                                                  VerticalAlignment="Center" />
+                                        <StackPanel Grid.Column="1" Spacing="0">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                            <TextBlock Opacity="0.55" FontSize="11"
+                                                       Text="{Binding Subtitle}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </TreeDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+                    </Border>
+
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Text="Valheim project" />
+                    <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                               Text="Export to mod copies checked folders/items into Assets/Items/… and regenerates ArtItemHooks.g.cs. Prefabs in art.bundle ship as-is — Valheim donor assets are never dumped into the bundle." />
+                    <TextBox Text="{Binding ValheimProjectPath}" PlaceholderText="Path to DrakesAssetForgeTest" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Browse project…" Command="{Binding BrowseValheimProjectCommand}" />
+                        <Button Content="Export to mod" Command="{Binding SyncValheimProjectCommand}" />
+                    </StackPanel>
+                    <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{Binding ValheimProjectStatus}" />
+
+                    <Border BorderBrush="#33888888" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,8,0,0">
+                        <StackPanel Spacing="8">
+                            <TextBlock FontSize="14" FontWeight="SemiBold" Text="Optional · Unity art tools" />
+                            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
+                                       Text="Only needed to pack an FBX into art.bundle, or to extract a named prefab from a multi-prefab import. Imported single-prefab bundles already have art.bundle — just Export to mod." />
+                            <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                                       Text="{Binding RequiredUnityVersion, StringFormat=Valheim Unity: {0}}" />
+                            <TextBlock TextWrapping="Wrap" Text="{Binding UnityStatus}" />
+                            <TextBox Text="{Binding UnityEditorPath}" PlaceholderText="Path to Unity.exe" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Browse Unity…" Command="{Binding BrowseUnityEditorCommand}" />
+                                <Button Content="Compile FBX → art.bundle"
+                                        Command="{Binding CompileArtBundleCommand}"
+                                        IsEnabled="{Binding !IsArtCompileBusy}" />
+                            </StackPanel>
+                            <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap"
+                                       Text="{Binding SelectedOwnedItem.DisplayName, StringFormat=Selected item for FBX compile: {0}}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Button Content="Back to Project"
                             HorizontalAlignment="Left"
                             Command="{Binding SetAppScreenCommand}"
-                            CommandParameter="Catalog" />
+                            CommandParameter="Project" />
                 </StackPanel>
+                </ScrollViewer>
             </Border>
         </Panel>
     </DockPanel>

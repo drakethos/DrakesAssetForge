@@ -122,6 +122,36 @@
                               IsChecked="{Binding UseDonorMaterials}"
                               IsVisible="{Binding CanEditMaterial}"
                               IsEnabled="{Binding CanEditMaterial}" />
+                    <CheckBox Content="Use existing catalog materials on the new mesh"
+                              IsChecked="{Binding UseExistingMaterials}"
+                              IsVisible="{Binding CanEditMaterial}"
+                              IsEnabled="{Binding CanEditMaterial}" />
+
+                    <StackPanel IsVisible="{Binding IsExistingMaterialMode}" Spacing="6">
+                        <TextBlock Opacity="0.7" Text="Assigned materials" />
+                        <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                                   Text="One name fills every slot. Several names fill slots in order. Type iron for the iron item material. The loader matches a loaded material, then an iron prefab. BepInEx config Materials overrides this list." />
+                        <ListBox ItemsSource="{Binding ExistingMaterialNames}"
+                                 SelectedItem="{Binding SelectedExistingMaterial}"
+                                 MaxHeight="120" />
+                        <Button Content="Remove selected"
+                                Command="{Binding RemoveExistingMaterialCommand}" />
+                        <TextBox PlaceholderText="Filter catalog materials…"
+                                 Text="{Binding ExistingMaterialFilter}" />
+                        <ListBox ItemsSource="{Binding FilteredCatalogMaterials}"
+                                 SelectedItem="{Binding SelectedCatalogMaterial}"
+                                 MaxHeight="160">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="models:CatalogMaterialChoice">
+                                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBox PlaceholderText="Or type a material name (must match in-game)"
+                                 Text="{Binding TypedMaterialName}" />
+                        <Button Content="Add material"
+                                Command="{Binding AddExistingMaterialCommand}" />
+                    </StackPanel>
 
                     <TextBox PlaceholderText="Filter shaders (e.g. Creature, Piece)…"
                              Text="{Binding MaterialShaderFilter}" />
@@ -186,13 +216,43 @@
 
                     <StackPanel IsVisible="{Binding CanEditArt}" Spacing="10">
                         <StackPanel Spacing="4">
+                            <TextBlock FontWeight="SemiBold" Text="Prefab / spawn name" />
+                            <TextBox Text="{Binding ArtPrefabName}"
+                                     PlaceholderText="Leave empty to keep Custom_…" />
+                            <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                                       Text="This is the in-game prefab id (spawn / cheat name). Letters, digits, underscore. It does not rename the project folder. Empty keeps the Custom_ name from clone." />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock FontWeight="SemiBold" Text="Scale" />
+                            <TextBox Text="{Binding ArtScale}"
+                                     PlaceholderText="1"
+                                     Width="120"
+                                     HorizontalAlignment="Left" />
+                            <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                                       Text="Uniform world scale. 1 is the imported size, which is often huge. 0.1 is a small prop. Preview still auto-fits. BepInEx config Scale overrides this after the plugin loads (0 in config means use this value)." />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock FontWeight="SemiBold" Text="Description" />
+                            <TextBox Text="{Binding ArtDescription}"
+                                     AcceptsReturn="True"
+                                     MinHeight="48"
+                                     PlaceholderText="Empty keeps the donor prefab description" />
+                            <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                                       Text="Leave empty to use the donor item's description. Or set it here, in BepInEx config, or in Customize\&lt;item&gt;Customize.cs. The code hook wins." />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
                             <TextBlock FontWeight="SemiBold" Text="Mesh (FBX)" />
                             <TextBox Text="{Binding ArtMeshPath}"
                                      PlaceholderText="art/mesh.fbx"
                                      IsReadOnly="True" />
+                            <CheckBox Content="Pack mesh into art.bundle"
+                                      IsChecked="{Binding IncludeMeshInBundle}" />
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <Button Content="Browse…" Command="{Binding BrowseArtMeshCommand}" />
-                                <Button Content="Clear" Command="{Binding ClearArtMeshCommand}" />
+                                <Button Content="Remove" Command="{Binding ClearArtMeshCommand}" />
                             </StackPanel>
                         </StackPanel>
 
@@ -201,9 +261,11 @@
                             <TextBox Text="{Binding ArtIconPath}"
                                      PlaceholderText="art/icon.png"
                                      IsReadOnly="True" />
+                            <CheckBox Content="Copy icon with the item"
+                                      IsChecked="{Binding IncludeIconInBundle}" />
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <Button Content="Browse…" Command="{Binding BrowseArtIconCommand}" />
-                                <Button Content="Clear" Command="{Binding ClearArtIconCommand}" />
+                                <Button Content="Remove" Command="{Binding ClearArtIconCommand}" />
                             </StackPanel>
                         </StackPanel>
 
@@ -212,15 +274,33 @@
                             <TextBox Text="{Binding ArtDiffusePath}"
                                      PlaceholderText="art/diffuse.png"
                                      IsReadOnly="True" />
+                            <CheckBox Content="Pack diffuse into the next art.bundle"
+                                      IsChecked="{Binding IncludeDiffuseInBundle}" />
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <Button Content="Browse…" Command="{Binding BrowseArtDiffuseCommand}" />
-                                <Button Content="Clear" Command="{Binding ClearArtDiffuseCommand}" />
+                                <Button Content="Remove" Command="{Binding ClearArtDiffuseCommand}" />
                             </StackPanel>
                         </StackPanel>
 
-                        <Button Content="Open item folder on disk"
-                                HorizontalAlignment="Left"
-                                Command="{Binding RevealOwnedItemFolderCommand}" />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Content="Extract from imported bundle"
+                                    Command="{Binding ExtractSelectedBundleCommand}"
+                                    IsVisible="{Binding NeedsBundleExtract}"
+                                    IsEnabled="{Binding !IsBusy}" />
+                            <Button Content="Compile art bundle"
+                                    Command="{Binding CompileArtBundleCommand}"
+                                    IsEnabled="{Binding !IsArtCompileBusy}" />
+                            <Button Content="Remove compiled bundle"
+                                    Command="{Binding RemoveCompiledBundleCommand}"
+                                    IsEnabled="{Binding HasCompiledBundle}" />
+                            <Button Content="Open item folder"
+                                    Command="{Binding RevealOwnedItemFolderCommand}" />
+                        </StackPanel>
+                        <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                                   IsVisible="{Binding NeedsBundleExtract}"
+                                   Text="This item came from a multi-prefab Unity Assets bundle. Extract pulls its prefab into a standard art.bundle (needs Unity on the Export screen). Or File → Extract all pending." />
+                        <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                                   Text="Unchecked pieces stay on disk but are left out of the next sync. Diffuse only leaves art.bundle after you compile again. Remove compiled bundle deletes the shipped mesh now." />
 
                         <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
                                    Text="Browse auto-saves art.json into the item folder. Look for art/mesh.fbx, art/icon.png beside item.json." />

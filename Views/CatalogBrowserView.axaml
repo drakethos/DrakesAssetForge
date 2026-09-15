@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:DrakeAssetForge.ViewModels"
+             xmlns:models="using:DrakeAssetForge.Models"
              x:Class="DrakeAssetForge.Views.CatalogBrowserView"
              x:DataType="vm:MainViewModel">
 
@@ -53,7 +54,7 @@
                 <TextBlock FontWeight="SemiBold" Opacity="0.8" Text="Pinned" />
                 <ListBox ItemsSource="{Binding Pins}"
                          SelectedItem="{Binding SelectedPin}"
-                         MaxHeight="100"
+                         MaxHeight="120"
                          ContextRequested="OnPinsContextRequested">
                     <ListBox.ContextMenu>
                         <ContextMenu>
@@ -67,8 +68,17 @@
                         </ContextMenu>
                     </ListBox.ContextMenu>
                     <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding DisplayName}" />
+                        <DataTemplate x:DataType="models:SoftRefAssetEntry">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" MinHeight="24">
+                                <Border Width="22" Height="22" CornerRadius="3" Background="#22888888"
+                                        ClipToBounds="True">
+                                    <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
+                                </Border>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding DisplayName}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
@@ -82,6 +92,7 @@
                   CanUserSortColumns="True"
                   GridLinesVisibility="Horizontal"
                   Margin="0,8,0,0"
+                  LoadingRow="OnCatalogLoadingRow"
                   ContextRequested="OnCatalogGridContextRequested">
             <DataGrid.ContextMenu>
                 <ContextMenu>
@@ -98,7 +109,22 @@
                 </ContextMenu>
             </DataGrid.ContextMenu>
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="*" />
+                <DataGridTemplateColumn Header="Name" Width="*" SortMemberPath="DisplayName">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="models:SoftRefAssetEntry">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" MinHeight="26">
+                                <Border Width="24" Height="24" CornerRadius="3" Background="#22888888"
+                                        ClipToBounds="True">
+                                    <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
+                                </Border>
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding DisplayName}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Sub" Binding="{Binding SubCategory}" Width="100" />
                 <DataGridTextColumn Header="Kind" Binding="{Binding Kind}" Width="90" />
                 <DataGridTextColumn Header="Bundle" Binding="{Binding BundleId}" Width="80" />

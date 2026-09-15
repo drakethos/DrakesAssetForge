@@ -1,6 +1,9 @@
+using Avalonia.Media.Imaging;
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace DrakeAssetForge.Models;
 
-public sealed class SoftRefAssetEntry
+public partial class SoftRefAssetEntry : ObservableObject
 {
     public required string AssetId { get; init; }
     public required string BundleId { get; init; }
@@ -14,4 +17,7 @@ public sealed class SoftRefAssetEntry
     public string Category { get; init; } = "Other";
     public string SubCategory { get; init; } = "";
     public bool IsResourceNoise { get; init; }
+
+    [ObservableProperty]
+    private Bitmap? _thumbnail;
 }

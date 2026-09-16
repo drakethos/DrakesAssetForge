@@ -211,12 +211,117 @@ public static class BundleProjectImporter
         var imported = new List<OwnedItemDocument>();
         var skippedVanilla = 0;
         var needsExtract = 0;
-        var group = SanitizeGroupFromFolder(folder);
+        var defaultGroup = SanitizeGroupFromFolder(folder);
 
+        // Folder packs: Assets/Items/keys/keys.bundle + keymaker.json …
+        foreach (var packDir in Directory.EnumerateDirectories(itemsRoot))
+        {
+            var packName = Path.GetFileName(packDir);
+            var packBundle = Path.Combine(packDir, packName + ".bundle");
+            if (!File.Exists(packBundle))
+            {
+                packBundle = Directory.EnumerateFiles(packDir, "*.bundle", SearchOption.TopDirectoryOnly)
+                    .FirstOrDefault(f => !Path.GetFileName(f).Equals("art.bundle", StringComparison.OrdinalIgnoreCase))
+                    ?? "";
+            }
+
+            var packJsons = Directory.EnumerateFiles(packDir, "*.json", SearchOption.TopDirectoryOnly)
+                .Where(j => !Path.GetFileName(j).Equals("item.json", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (string.IsNullOrEmpty(packBundle) || !File.Exists(packBundle) || packJsons.Count == 0)
+                continue;
+
+            string? sharedImportRel = null;
+            try
+            {
+                sharedImportRel = store.ImportSourceBundle(packBundle);
+            }
+            catch
+            {
+                // continue per-item without source
+            }
+
+            foreach (var wirePath in packJsons)
+            {
+                var id = Path.GetFileNameWithoutExtension(wirePath);
+                string? donor = null;
+                string? displayName = id;
+                try
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(wirePath));
+                    id = ReadString(doc.RootElement, "id") ?? id;
+                    donor = ReadString(doc.RootElement, "donor");
+                    displayName = ReadString(doc.RootElement, "displayName") ?? id;
+                }
+                catch
+                {
+                    // keep leaf id
+                }
+
+                if (IsVanillaExact(id!, vanillaNames))
+                {
+                    skippedVanilla++;
+                    continue;
+                }
+
+                var owned = store.CreateImportedItem(
+                    preferredId: id!,
+                    displayName: displayName ?? id!,
+                    donorPrefabName: string.IsNullOrWhiteSpace(donor) ? DefaultDonor : donor!,
+                    preferredGroup: packName);
+
+                var art = store.LoadArt(owned);
+                art.PrefabName = owned.Id;
+                if (!string.IsNullOrWhiteSpace(sharedImportRel))
+                {
+                    art.SourceBundlePath = sharedImportRel;
+                    art.SourcePrefabName = owned.Id;
+                    art.NeedsBundleExtract = true;
+                    art.IncludeMesh = true;
+                    needsExtract++;
+                }
+
+                var iconSrc = Path.Combine(packDir, owned.Id + ".png");
+                if (!File.Exists(iconSrc))
+                    iconSrc = Path.Combine(packDir, Path.GetFileNameWithoutExtension(wirePath) + ".png");
+                if (File.Exists(iconSrc))
+                {
+                    art.IconPath = store.ImportArtFile(owned, iconSrc, "icon.png");
+                    art.IncludeIcon = true;
+                }
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(wirePath));
+                    if (doc.RootElement.TryGetProperty("scale", out var scaleEl) &&
+                        scaleEl.TryGetSingle(out var scale) && scale > 0)
+                        art.Scale = scale;
+                    art.Description = ReadString(doc.RootElement, "description");
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                store.SaveArt(owned, art);
+                store.LoadItem(owned.DocumentPath);
+                imported.Add(owned);
+            }
+        }
+
+        // Legacy: …/item.json folders
         foreach (var itemDir in EnumerateItemFolders(itemsRoot))
         {
             var wirePath = Path.Combine(itemDir, "item.json");
             if (!File.Exists(wirePath))
+                continue;
+
+            // Skip dirs that were already handled as folder packs (parent has pack jsons + bundle).
+            var parent = Path.GetDirectoryName(itemDir);
+            if (parent != null &&
+                Directory.EnumerateFiles(parent, "*.json", SearchOption.TopDirectoryOnly)
+                    .Any(j => !Path.GetFileName(j).Equals("item.json", StringComparison.OrdinalIgnoreCase)) &&
+                Directory.EnumerateFiles(parent, "*.bundle", SearchOption.TopDirectoryOnly).Any())
                 continue;
 
             string? id = null;
@@ -243,11 +348,14 @@ public static class BundleProjectImporter
                 continue;
             }
 
+            if (imported.Any(i => i.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
             var owned = store.CreateImportedItem(
                 preferredId: id,
                 displayName: displayName ?? id,
                 donorPrefabName: string.IsNullOrWhiteSpace(donor) ? DefaultDonor : donor!,
-                preferredGroup: group);
+                preferredGroup: defaultGroup);
 
             var art = store.LoadArt(owned);
             art.PrefabName = owned.Id;
@@ -266,7 +374,6 @@ public static class BundleProjectImporter
                 art.IncludeIcon = true;
             }
 
-            // Copy scale / description from thin wire when present.
             try
             {
                 using var doc = JsonDocument.Parse(File.ReadAllText(wirePath));
@@ -281,7 +388,7 @@ public static class BundleProjectImporter
             }
 
             store.SaveArt(owned, art);
-            store.LoadItem(owned.DocumentPath); // refresh badges via reload path
+            store.LoadItem(owned.DocumentPath);
             imported.Add(owned);
         }
 
@@ -447,6 +554,36 @@ public static class BundleProjectImporter
         var n = name.Replace('\\', '/');
         var leaf = Path.GetFileNameWithoutExtension(n);
         return string.IsNullOrWhiteSpace(leaf) ? n.Trim() : leaf.Trim();
+    }
+
+    /// <summary>Finds the Unity asset path/name to load from a fat mod bundle (prefers full container path).</summary>
+    public static string? ResolvePrefabNameInBundle(string bundlePath, string preferredName)
+    {
+        if (string.IsNullOrWhiteSpace(preferredName) || !File.Exists(bundlePath))
+            return null;
+
+        var objects = BundleAssetLister.ListObjects(bundlePath, maxObjects: 8000);
+        var prefabs = objects.Where(IsPrefabLike).ToList();
+        if (prefabs.Count == 0)
+            return preferredName.Trim();
+
+        var want = preferredName.Trim();
+        var wantLeaf = PrefabDisplayName(want);
+
+        // Prefer the full container path Unity registered (assets/drake/locksmit/masterkey.prefab).
+        var match = prefabs
+            .Select(o => new { Raw = o.Name, Leaf = PrefabDisplayName(o.Name) })
+            .Where(x =>
+                x.Leaf.Equals(wantLeaf, StringComparison.OrdinalIgnoreCase) ||
+                x.Raw.Equals(want, StringComparison.OrdinalIgnoreCase) ||
+                x.Raw.EndsWith("/" + wantLeaf + ".prefab", StringComparison.OrdinalIgnoreCase) ||
+                x.Leaf.Contains(wantLeaf, StringComparison.OrdinalIgnoreCase) ||
+                wantLeaf.Contains(x.Leaf, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.Leaf.Equals(wantLeaf, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(x => x.Raw.Length)
+            .FirstOrDefault();
+
+        return match?.Raw ?? wantLeaf;
     }
 
     private static bool IsVanillaExact(string name, IReadOnlySet<string> vanilla) =>

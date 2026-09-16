@@ -53,7 +53,7 @@ public sealed class OwnedItemDocument
     [JsonIgnore]
     public string ArtBadgeDisplay =>
         string.IsNullOrWhiteSpace(ArtBadge)
-            ? "art: none — scripts/properties only (art optional)"
+            ? "art: none — Export ships hooks only (no custom bundle)"
             : $"art: {ArtBadge.Trim()}";
 }
 

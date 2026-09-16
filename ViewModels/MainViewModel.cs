@@ -17,6 +17,7 @@ public partial class MainViewModel : ViewModelBase
     private string? _resolvedPathId;
     private SoftRefPropertySpyService? _fieldSpy;
     private int _fieldSpyGeneration;
+    private int _ownedPreviewGeneration;
     private ProjectStore _projectStore = new(ProjectStore.DefaultProjectRoot());
     private readonly ShaderCatalogService _shaderCatalogService = new();
     private readonly SoftRefThumbnailCache _thumbnails = new();
@@ -111,7 +112,7 @@ public partial class MainViewModel : ViewModelBase
 
     [ObservableProperty]
     private string _exportStubNote =
-        "Export is folder-first: check a group to include all its items (then uncheck individuals). Sync ships item.json + hooks; art.bundle when present. FBX compile is optional.";
+        "Export packs each Project folder into one Assets/Items/<folder>/<folder>.bundle with <itemId>.json beside it (e.g. keys/keys.bundle + masterkey.json). Ungrouped items still use the legacy per-item folder. SoftRef catalog is never bulk-dumped.";
 
     [ObservableProperty]
     private string _unityEditorPath = "";
@@ -132,7 +133,7 @@ public partial class MainViewModel : ViewModelBase
     private string _valheimProjectPath = "";
 
     [ObservableProperty]
-    private string _valheimProjectStatus = "Set a Valheim project to copy art bundles into the test mod.";
+    private string _valheimProjectStatus = "Set a code project folder. Export makes art.bundles then wires Assets/Items + hooks.";
 
     [ObservableProperty]
     private OwnedItemDocument? _selectedOwnedItem;
@@ -681,21 +682,31 @@ public partial class MainViewModel : ViewModelBase
         await ExtractItemsAsync(pending);
     }
 
-    private async Task ExtractItemsAsync(IReadOnlyList<(OwnedItemDocument Item, ArtDocument Art)> pending)
+    private sealed class ExtractBatchResult
+    {
+        public int Ok { get; init; }
+        public int Fail { get; init; }
+        public string? LastError { get; init; }
+        public bool Success => Fail == 0;
+    }
+
+    private async Task<ExtractBatchResult> ExtractItemsAsync(IReadOnlyList<(OwnedItemDocument Item, ArtDocument Art)> pending)
     {
         var unity = UnityEditorPath;
         if (string.IsNullOrWhiteSpace(unity) || !File.Exists(unity))
         {
-            StatusText = "Set Unity.exe on the Export screen before extracting (File → Extract also needs it).";
+            var msg = "Set Unity.exe on the Export screen before extracting (File → Extract also needs it).";
+            StatusText = msg;
             AppScreen = AppScreen.Export;
-            return;
+            return new ExtractBatchResult { Fail = pending.Count, LastError = msg };
         }
 
         var template = UnityArtCompiler.FindTemplateSource();
         if (template == null)
         {
-            StatusText = "Unity template missing.";
-            return;
+            const string msg = "Unity template missing.";
+            StatusText = msg;
+            return new ExtractBatchResult { Fail = pending.Count, LastError = msg };
         }
 
         try
@@ -706,13 +717,18 @@ public partial class MainViewModel : ViewModelBase
             string? lastFail = null;
             foreach (var (item, art) in pending)
             {
-                var source = _projectStore.ResolveProjectRelativePath(art.SourceBundlePath);
+                var source = _projectStore.ResolveSourceBundlePath(art.SourceBundlePath);
                 if (source == null || string.IsNullOrWhiteSpace(art.SourcePrefabName))
                 {
                     fail++;
-                    lastFail = $"{item.Id}: missing Imports source bundle or prefab name.";
+                    lastFail =
+                        $"{item.Id}: missing source bundle '{art.SourceBundlePath}'. " +
+                        "If this project is the mod repo, ensure Assets/drake (or ploam) exists, or File → Import Mod Assets Folder.";
                     continue;
                 }
+
+                var prefabName = BundleProjectImporter.ResolvePrefabNameInBundle(source, art.SourcePrefabName)
+                                 ?? art.SourcePrefabName;
 
                 var progress = new Progress<string>(msg => StatusText = $"{item.Id}: {msg}");
                 var result = await UnityArtCompiler.ExtractPrefabAsync(
@@ -721,7 +737,7 @@ public partial class MainViewModel : ViewModelBase
                     new UnityArtExtractRequest
                     {
                         SourceBundlePath = source,
-                        PrefabName = art.SourcePrefabName,
+                        PrefabName = prefabName,
                         OutputBundlePath = Path.Combine(item.FolderPath, "art.bundle"),
                         BundleName = "art",
                     },
@@ -731,6 +747,8 @@ public partial class MainViewModel : ViewModelBase
                 {
                     art.NeedsBundleExtract = false;
                     art.IncludeMesh = true;
+                    if (!prefabName.Equals(art.SourcePrefabName, StringComparison.Ordinal))
+                        art.SourcePrefabName = prefabName;
                     _projectStore.SaveArt(item, art);
                     ok++;
                 }
@@ -748,10 +766,12 @@ public partial class MainViewModel : ViewModelBase
             StatusText = fail == 0
                 ? $"Extracted {ok} art bundle(s)."
                 : $"Extracted {ok}, failed {fail}. {lastFail}";
+            return new ExtractBatchResult { Ok = ok, Fail = fail, LastError = lastFail };
         }
         catch (Exception ex)
         {
             StatusText = $"Extract failed: {ex.Message}";
+            return new ExtractBatchResult { Fail = pending.Count, LastError = ex.Message };
         }
         finally
         {
@@ -788,7 +808,10 @@ public partial class MainViewModel : ViewModelBase
         {
             ReloadOwnedItems();
             if (SelectedOwnedItem != null)
+            {
                 LoadOwnedItemIntoInspector(SelectedOwnedItem);
+                _ = RefreshOwnedPreviewAsync(SelectedOwnedItem);
+            }
         }
         else if (value == AppScreen.Catalog && SelectedAsset != null)
         {
@@ -1097,6 +1120,18 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     public async Task RefreshPreviewAsync()
     {
+        if (AppScreen == AppScreen.Project)
+        {
+            if (SelectedOwnedItem == null)
+            {
+                ClearPreview("Select a Project item to preview.");
+                return;
+            }
+
+            await RefreshOwnedPreviewAsync(SelectedOwnedItem);
+            return;
+        }
+
         ClearPreview("Loading preview…");
 
         if (SelectedAsset == null || _index == null)
@@ -1784,6 +1819,7 @@ public partial class MainViewModel : ViewModelBase
         foreach (var node in ordered)
             ProjectTree.Add(node);
 
+        _thumbnails.InvalidateAllOwned();
         foreach (var node in EnumerateTreeNodes())
             _thumbnails.RequestProjectThumb(node, _projectStore);
     }
@@ -2242,15 +2278,15 @@ public partial class MainViewModel : ViewModelBase
 
         return parts.Count == 0
             ? SelectedOwnedItem != null && File.Exists(Path.Combine(SelectedOwnedItem.FolderPath, "art.bundle"))
-                ? "Compiled art.bundle present (scripts/properties editable; art optional to recompile)."
+                ? "art.bundle present — Export ships it. Rebuild only if you changed FBX/diffuse."
                 : SelectedOwnedItem?.NeedsBundleExtract == true
-                    ? "Imported fat bundle — File → Extract imported bundles… (needs Unity)."
-                    : "No art attached — optional. Edit Scripts/properties and Sync anytime."
+                    ? "Imported multi-prefab — Export (or Extract) packs it into art.bundle via Unity."
+                    : "No custom art — Export ships item.json + hooks only (donor stays in-game)."
             : SelectedOwnedItem != null &&
               !string.IsNullOrWhiteSpace(ArtMeshPath) &&
               IncludeMeshInBundle &&
               !File.Exists(Path.Combine(SelectedOwnedItem.FolderPath, "art.bundle"))
-                ? $"Attached: {string.Join(", ", parts)}. Mesh is not in-game until you Export → Compile art bundle."
+                ? $"Attached: {string.Join(", ", parts)}. Export will compile FBX → art.bundle then wire the mod."
                 : $"Attached: {string.Join(", ", parts)}. Save writes art.json.";
     }
 
@@ -2341,10 +2377,7 @@ public partial class MainViewModel : ViewModelBase
             return;
         PersistArtAndRefreshBadges();
         ArtStatus = SummarizeArtStatus();
-        if (!string.IsNullOrWhiteSpace(ValheimProjectPath))
-            SyncValheimProject();
-        else
-            StatusText = "Bundle checklist saved. Sync assets to update the mod folder.";
+        StatusText = "Art checklist saved. Run Export to make/ship art.bundles into the code project.";
     }
 
     [RelayCommand]
@@ -2952,32 +2985,64 @@ public partial class MainViewModel : ViewModelBase
 
     private async Task RefreshOwnedPreviewAsync(OwnedItemDocument doc)
     {
+        var gen = Interlocked.Increment(ref _ownedPreviewGeneration);
         UpdateMeshPreview(doc);
-        // Prefer user-attached icon PNG when present.
-        var iconAbs = ProjectStore.ResolveArtAbsolutePath(doc, string.IsNullOrWhiteSpace(ArtIconPath) ? null : ArtIconPath)
-                      ?? ProjectStore.ResolveArtAbsolutePath(doc, _projectStore.LoadArt(doc).IconPath);
-        if (iconAbs != null)
+        var art = _projectStore.LoadArt(doc);
+
+        try
         {
-            try
+            var custom = await Task.Run(() => OwnedArtPreview.Resolve(_projectStore, doc, art));
+            if (gen != _ownedPreviewGeneration || SelectedOwnedItem?.Id != doc.Id)
             {
-                await using var stream = File.OpenRead(iconAbs);
-                var bmp = new Bitmap(stream);
-                PreviewBitmap?.Dispose();
-                PreviewBitmap = bmp;
-                HasPreviewImage = true;
-                PreviewCaption = $"Owned '{doc.DisplayName}' · custom icon {Path.GetFileName(iconAbs)}";
+                custom.Bitmap?.Dispose();
                 return;
             }
-            catch (Exception ex)
+
+            if (custom.Bitmap != null)
             {
-                ClearPreview($"Custom icon failed ({ex.Message}); falling back to SoftRef donor.", clearMesh: false);
+                PreviewBitmap?.Dispose();
+                PreviewBitmap = custom.Bitmap;
+                HasPreviewImage = true;
+                PreviewCaption = custom.Caption;
+                // Reload art UI if icon was just persisted.
+                if (string.IsNullOrWhiteSpace(ArtIconPath) &&
+                    !string.IsNullOrWhiteSpace(_projectStore.LoadArt(doc).IconPath))
+                    LoadArtIntoUi(doc);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(custom.MeshPath))
+            {
+                ClearPreview(custom.Caption, clearMesh: false);
+                MeshPreviewPath = custom.MeshPath;
+                PreviewCaption = custom.Caption;
+                return;
+            }
+
+            // Imported / custom items: never show SoftRef LeatherScraps as if it were the art.
+            if (!custom.UsedDonorFallback)
+            {
+                ClearPreview(custom.Caption, clearMesh: false);
+                return;
             }
         }
+        catch (Exception ex)
+        {
+            if (gen != _ownedPreviewGeneration || SelectedOwnedItem?.Id != doc.Id)
+                return;
+            ClearPreview($"Custom preview failed: {ex.Message}", clearMesh: false);
+            return;
+        }
 
-        ClearPreview("Loading donor icon…", clearMesh: false);
+        if (gen != _ownedPreviewGeneration || SelectedOwnedItem?.Id != doc.Id)
+            return;
+
+        // SoftRef donor only for real SoftRef clones (not Imported LeatherScraps stubs).
         if (_index == null || string.IsNullOrWhiteSpace(doc.Donor.PrefabName))
         {
-            ClearPreview("Load SoftRef to preview the donor icon for this owned item.", clearMesh: false);
+            ClearPreview(
+                $"Owned '{doc.DisplayName}' · no custom preview yet.",
+                clearMesh: false);
             return;
         }
 
@@ -2988,21 +3053,21 @@ public partial class MainViewModel : ViewModelBase
 
         if (donor == null)
         {
-            ClearPreview($"Donor '{doc.Donor.PrefabName}' not found in SoftRef index.", clearMesh: false);
+            ClearPreview($"Owned '{doc.DisplayName}' · no custom art yet; SoftRef donor '{doc.Donor.PrefabName}' not loaded.", clearMesh: false);
             return;
         }
 
         var icon = SoftRefPreviewService.FindIconForItem(donor, _allAssets);
         if (icon == null)
         {
-            ClearPreview($"No icon for donor '{donor.DisplayName}'.", clearMesh: false);
+            ClearPreview($"Owned '{doc.DisplayName}' · no SoftRef icon for donor '{donor.DisplayName}'.", clearMesh: false);
             return;
         }
 
         var bundlePath = ResolveBundlePath(icon.BundleId);
         if (bundlePath == null)
         {
-            ClearPreview($"Icon bundle missing: {icon.BundleId}", clearMesh: false);
+            ClearPreview($"Owned '{doc.DisplayName}' · donor icon bundle missing.", clearMesh: false);
             return;
         }
 
@@ -3010,12 +3075,19 @@ public partial class MainViewModel : ViewModelBase
         {
             var result = await Task.Run(() =>
                 SoftRefPreviewService.PreviewTextureByContainerPath(bundlePath, icon.PathInBundle));
+            if (gen != _ownedPreviewGeneration || SelectedOwnedItem?.Id != doc.Id)
+            {
+                result.Bitmap?.Dispose();
+                return;
+            }
+
             if (result.Error == null && result.Bitmap != null)
             {
                 result = new SoftRefPreviewResult
                 {
                     Bitmap = result.Bitmap,
-                    Caption = $"Owned '{doc.DisplayName}' · donor icon {result.Caption}",
+                    Caption =
+                        $"Owned '{doc.DisplayName}' · SoftRef donor ({doc.Donor.PrefabName})",
                 };
             }
 
@@ -3023,6 +3095,8 @@ public partial class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            if (gen != _ownedPreviewGeneration || SelectedOwnedItem?.Id != doc.Id)
+                return;
             ClearPreview($"Preview error: {ex.Message}", clearMesh: false);
         }
     }
@@ -3091,7 +3165,7 @@ public partial class MainViewModel : ViewModelBase
         var art = _projectStore.LoadArt(SelectedOwnedItem);
         if (!art.IncludeMesh)
         {
-            StatusText = "Mesh is unchecked, so it will not be packed. Check it on the Art sheet, or Remove compiled bundle to stop shipping the old one.";
+            StatusText = "Mesh is unchecked, so it will not be packed. Check it on the Art sheet first.";
             UnityStatus = StatusText;
             return;
         }
@@ -3099,27 +3173,16 @@ public partial class MainViewModel : ViewModelBase
         var mesh = ProjectStore.ResolveArtAbsolutePath(SelectedOwnedItem, art.MeshPath);
         if (mesh == null)
         {
-            StatusText = "Attach an FBX on the Art sheet before compiling.";
+            StatusText = "Attach an FBX on the Art sheet before rebuilding art.bundle.";
             UnityStatus = StatusText;
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(UnityEditorPath) || !File.Exists(UnityEditorPath))
+        if (!EnsureUnityReady(out var unityError))
         {
-            RefreshUnityDetection();
-            if (string.IsNullOrWhiteSpace(UnityEditorPath))
-            {
-                StatusText = UnityStatus;
-                AppScreen = AppScreen.Export;
-                return;
-            }
-        }
-
-        var template = UnityArtCompiler.FindTemplateSource();
-        if (template == null)
-        {
-            StatusText = "UnityTemplate folder is missing next to the app.";
-            UnityStatus = StatusText;
+            StatusText = unityError;
+            UnityStatus = unityError;
+            AppScreen = AppScreen.Export;
             return;
         }
 
@@ -3127,33 +3190,13 @@ public partial class MainViewModel : ViewModelBase
         AppScreen = AppScreen.Export;
         try
         {
-            UnityArtCompiler.SaveUnityExe(UnityEditorPath);
-            var progress = new Progress<string>(msg =>
-            {
-                UnityStatus = msg;
-                StatusText = msg;
-            });
-            var result = await UnityArtCompiler.CompileAsync(
-                UnityEditorPath,
-                template,
-                new UnityArtCompileRequest
-                {
-                    MeshPath = mesh,
-                    DiffusePath = art.IncludeDiffuse
-                        ? ProjectStore.ResolveArtAbsolutePath(SelectedOwnedItem, art.DiffusePath)
-                        : null,
-                    OutputBundlePath = Path.Combine(SelectedOwnedItem.FolderPath, "art.bundle"),
-                    BundleName = SelectedOwnedItem.Id,
-                },
-                progress);
-
+            var result = await CompileItemArtAsync(SelectedOwnedItem, art, force: true);
             UnityStatus = result.Message;
             StatusText = result.Success
-                ? $"{SelectedOwnedItem.Id}: {result.Message}"
+                ? $"{SelectedOwnedItem.Id}: {result.Message} Run Export to wire the code project."
                 : result.Message;
             RefreshCompiledBundleFlag(SelectedOwnedItem);
-            if (result.Success && !string.IsNullOrWhiteSpace(ValheimProjectPath))
-                SyncValheimProject();
+            RefreshExportTree();
         }
         catch (Exception ex)
         {
@@ -3174,7 +3217,7 @@ public partial class MainViewModel : ViewModelBase
             ValheimProjectPath = saved;
             ValheimProjectStatus = ValheimProjectSync.IsWired(saved)
                 ? $"Wired to {saved}"
-                : $"Path set, but ArtItems.Register was not found in {saved}";
+                : $"Path set, but ArtItemLoader.Register was not found in {saved}";
             return;
         }
 
@@ -3204,17 +3247,20 @@ public partial class MainViewModel : ViewModelBase
         _projectStore.SaveValheimProjectPath(picked);
         ValheimProjectStatus = ValheimProjectSync.IsWired(picked)
             ? $"Wired to {picked}"
-            : "Folder set. It does not call ArtItems.Register yet.";
+            : "Folder set. It does not call ArtItemLoader.Register yet.";
     }
 
     [RelayCommand]
-    public async Task SyncValheimProjectAsync()
+    public async Task ExportToModAsync()
     {
         if (string.IsNullOrWhiteSpace(ValheimProjectPath))
         {
-            ValheimProjectStatus = "Set a Valheim project folder first.";
+            ValheimProjectStatus = "Set a code project folder first.";
             return;
         }
+
+        if (IsArtCompileBusy)
+            return;
 
         PersistExportTreeIncludes();
 
@@ -3226,42 +3272,273 @@ public partial class MainViewModel : ViewModelBase
             _projectStore.SaveItem(SelectedOwnedItem);
         }
 
-        // Prepare art.bundles for included imports (no FBX required). Scripts-only items still export.
-        var extractPending = _projectStore.LoadAllItems()
+        var included = _projectStore.LoadAllItems()
             .Select(i => (Item: i, Art: _projectStore.LoadArt(i)))
-            .Where(x =>
-                x.Art.IncludeInExport &&
-                x.Art.NeedsBundleExtract &&
-                !File.Exists(Path.Combine(x.Item.FolderPath, "art.bundle")))
+            .Where(x => x.Art.IncludeInExport)
             .ToList();
 
-        if (extractPending.Count > 0)
+        if (included.Count == 0)
         {
-            var unity = UnityEditorPath;
-            if (!string.IsNullOrWhiteSpace(unity) && File.Exists(unity) &&
-                UnityArtCompiler.FindTemplateSource() != null)
+            var empty = ValheimProjectSync.Sync(_projectStore, ValheimProjectPath);
+            ValheimProjectStatus = empty.Message;
+            StatusText = empty.Message;
+            RefreshExportTree();
+            return;
+        }
+
+        IsArtCompileBusy = true;
+        try
+        {
+            var prepareError = await EnsureArtBundlesForExportAsync(included);
+            if (prepareError != null)
             {
-                StatusText = $"Extracting {extractPending.Count} imported prefab(s) into art.bundle before export…";
-                await ExtractItemsAsync(extractPending);
+                ValheimProjectStatus = prepareError;
+                StatusText = prepareError;
+                RefreshExportTree();
+                return;
             }
-            else
+
+            var packError = await EnsureFolderPackBundlesAsync(included);
+            if (packError != null)
             {
-                StatusText =
-                    $"{extractPending.Count} included item(s) still need Unity extract for art.bundle. " +
-                    "Export will still ship item.json + hooks. Set Unity on this screen to pack prefabs.";
+                ValheimProjectStatus = packError;
+                StatusText = packError;
+                RefreshExportTree();
+                return;
+            }
+
+            _projectStore.SaveValheimProjectPath(ValheimProjectPath);
+            var result = ValheimProjectSync.Sync(_projectStore, ValheimProjectPath);
+            ValheimProjectStatus = result.Message;
+            StatusText = result.Message;
+            RefreshExportTree();
+        }
+        finally
+        {
+            IsArtCompileBusy = false;
+        }
+    }
+
+    /// <summary>Fire-and-forget export used after renames / art checklist changes.</summary>
+    public void SyncValheimProject() => _ = ExportToModAsync();
+
+    /// <summary>
+    /// Extract pending imports and compile FBX for included items that lack art.bundle.
+    /// Returns an error message if Unity is required but missing, or visual items still lack bundles.
+    /// </summary>
+    private async Task<string?> EnsureArtBundlesForExportAsync(
+        IReadOnlyList<(OwnedItemDocument Item, ArtDocument Art)> included)
+    {
+        var extractPending = included
+            .Where(x =>
+                !File.Exists(Path.Combine(x.Item.FolderPath, "art.bundle")) &&
+                (x.Art.NeedsBundleExtract || !string.IsNullOrWhiteSpace(x.Art.SourceBundlePath)))
+            .ToList();
+
+        var compilePending = included
+            .Where(x =>
+                !File.Exists(Path.Combine(x.Item.FolderPath, "art.bundle")) &&
+                x.Art.IncludeMesh &&
+                ProjectStore.ResolveArtAbsolutePath(x.Item, x.Art.MeshPath) != null)
+            .ToList();
+
+        if (extractPending.Count > 0 || compilePending.Count > 0)
+        {
+            if (!EnsureUnityReady(out var unityError))
+                return unityError;
+
+            if (extractPending.Count > 0)
+            {
+                StatusText = $"Extracting {extractPending.Count} imported prefab(s) into art.bundle…";
+                var extractResult = await ExtractItemsAsync(extractPending);
+                if (extractResult.Fail > 0)
+                {
+                    return extractResult.Fail == extractPending.Count
+                        ? $"Export stopped — Unity extract failed for all {extractResult.Fail} item(s). {extractResult.LastError}"
+                        : $"Export stopped — Unity extract failed for {extractResult.Fail} item(s). {extractResult.LastError}";
+                }
+            }
+
+            if (compilePending.Count > 0)
+            {
+                StatusText = $"Compiling {compilePending.Count} FBX item(s) into art.bundle…";
+                var fail = 0;
+                string? lastFail = null;
+                foreach (var (item, art) in compilePending)
+                {
+                    // Re-check — extract may have produced a bundle for a weird edge case.
+                    if (File.Exists(Path.Combine(item.FolderPath, "art.bundle")))
+                        continue;
+                    var result = await CompileItemArtAsync(item, art, force: false);
+                    if (!result.Success)
+                    {
+                        fail++;
+                        lastFail = $"{item.Id}: {result.Message}";
+                    }
+                }
+
+                if (fail > 0)
+                    return $"Export stopped — FBX compile failed for {fail} item(s). {lastFail}";
             }
         }
 
-        _projectStore.SaveValheimProjectPath(ValheimProjectPath);
-        var result = ValheimProjectSync.Sync(_projectStore, ValheimProjectPath);
-        ValheimProjectStatus = result.Message;
-        StatusText = result.Message;
-        RefreshExportTree();
+        // Reload art docs after extract/compile mutations.
+        var missingVisual = new List<string>();
+        foreach (var (item, _) in included)
+        {
+            var art = _projectStore.LoadArt(item);
+            var hasBundle = File.Exists(Path.Combine(item.FolderPath, "art.bundle"));
+            if (!hasBundle && ExpectsCustomArtBundle(item, art))
+                missingVisual.Add(item.Id);
+        }
+
+        if (missingVisual.Count > 0)
+        {
+            return "Export stopped — these items need art.bundle but still lack one: " +
+                   string.Join(", ", missingVisual) +
+                   ". Set Unity and fix extract/FBX sources, or uncheck them.";
+        }
+
+        return null;
     }
 
-    /// <summary>Fire-and-forget sync used after renames / art checklist changes.</summary>
-    public void SyncValheimProject() => _ = SyncValheimProjectAsync();
+    /// <summary>
+    /// For each project group (e.g. keys), merge per-item art.bundles into Items/keys/keys.bundle
+    /// with prefabs named after each item id.
+    /// </summary>
+    private async Task<string?> EnsureFolderPackBundlesAsync(
+        IReadOnlyList<(OwnedItemDocument Item, ArtDocument Art)> included)
+    {
+        var groups = included
+            .GroupBy(x => ValheimProjectSync.TopGroupName(x.Item), StringComparer.OrdinalIgnoreCase)
+            .Where(g => !string.IsNullOrEmpty(g.Key))
+            .ToList();
 
+        if (groups.Count == 0)
+            return null;
+
+        foreach (var group in groups)
+        {
+            var groupName = group.Key;
+            var entries = group
+                .Select(x => (
+                    Item: x.Item,
+                    Art: x.Art,
+                    ArtBundle: Path.Combine(x.Item.FolderPath, "art.bundle")))
+                .Where(x => File.Exists(x.ArtBundle))
+                .Select(x => (
+                    x.ArtBundle,
+                    PrefabName: x.Item.Id,
+                    DiffusePath: x.Art.IncludeDiffuse
+                        ? ProjectStore.ResolveArtAbsolutePath(x.Item, x.Art.DiffusePath)
+                        : null))
+                .ToList();
+
+            if (entries.Count == 0)
+                continue;
+
+            if (!EnsureUnityReady(out var unityError))
+                return unityError;
+
+            var output = ValheimProjectSync.FolderBundlePath(_projectStore, groupName);
+            StatusText = $"Packing {groupName}.bundle ({entries.Count} prefab(s))…";
+            var progress = new Progress<string>(msg =>
+            {
+                UnityStatus = msg;
+                StatusText = msg;
+            });
+            var result = await UnityArtCompiler.PackFolderAsync(
+                UnityEditorPath,
+                UnityArtCompiler.FindTemplateSource()!,
+                new UnityArtPackFolderRequest
+                {
+                    OutputBundlePath = output,
+                    BundleName = groupName,
+                    Entries = entries,
+                },
+                progress);
+
+            if (!result.Success)
+                return $"Export stopped — could not pack {groupName}.bundle. {result.Message}";
+        }
+
+        return null;
+    }
+
+    private static bool ExpectsCustomArtBundle(OwnedItemDocument item, ArtDocument art)
+    {
+        if (art.NeedsBundleExtract)
+            return true;
+        if (!string.IsNullOrWhiteSpace(art.SourceBundlePath))
+            return true;
+        if (art.IncludeMesh && ProjectStore.ResolveArtAbsolutePath(item, art.MeshPath) != null)
+            return true;
+        return false;
+    }
+
+    private bool EnsureUnityReady(out string error)
+    {
+        if (string.IsNullOrWhiteSpace(UnityEditorPath) || !File.Exists(UnityEditorPath))
+            RefreshUnityDetection();
+
+        if (string.IsNullOrWhiteSpace(UnityEditorPath) || !File.Exists(UnityEditorPath))
+        {
+            error = "Set Unity.exe on the Export screen — Export needs it to make art.bundles (extract or FBX compile).";
+            return false;
+        }
+
+        if (UnityArtCompiler.FindTemplateSource() == null)
+        {
+            error = "UnityTemplate folder is missing next to the app.";
+            return false;
+        }
+
+        error = "";
+        return true;
+    }
+
+    private async Task<UnityArtCompileResult> CompileItemArtAsync(
+        OwnedItemDocument item,
+        ArtDocument art,
+        bool force)
+    {
+        var mesh = ProjectStore.ResolveArtAbsolutePath(item, art.MeshPath);
+        if (mesh == null)
+            return new UnityArtCompileResult { Success = false, Message = "No FBX attached." };
+
+        if (!force && File.Exists(Path.Combine(item.FolderPath, "art.bundle")))
+            return new UnityArtCompileResult { Success = true, Message = "art.bundle already present." };
+
+        var template = UnityArtCompiler.FindTemplateSource()!;
+        UnityArtCompiler.SaveUnityExe(UnityEditorPath);
+        var progress = new Progress<string>(msg =>
+        {
+            UnityStatus = $"{item.Id}: {msg}";
+            StatusText = UnityStatus;
+        });
+        var result = await UnityArtCompiler.CompileAsync(
+            UnityEditorPath,
+            template,
+            new UnityArtCompileRequest
+            {
+                MeshPath = mesh,
+                DiffusePath = art.IncludeDiffuse
+                    ? ProjectStore.ResolveArtAbsolutePath(item, art.DiffusePath)
+                    : null,
+                OutputBundlePath = Path.Combine(item.FolderPath, "art.bundle"),
+                BundleName = item.Id,
+            },
+            progress);
+
+        if (result.Success)
+        {
+            art.IncludeMesh = true;
+            _projectStore.SaveArt(item, art);
+            RefreshCompiledBundleFlag(item);
+        }
+
+        return result;
+    }
     public void RefreshExportTree()
     {
         foreach (var root in ExportTree.ToList())
@@ -3327,17 +3604,22 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(ExportIncludeSummary));
     }
 
-    private static string BuildExportStatus(OwnedItemDocument item, ArtDocument art)
+    private string BuildExportStatus(OwnedItemDocument item, ArtDocument art)
     {
         var parts = new List<string>();
         if (File.Exists(Path.Combine(item.FolderPath, "art.bundle")))
             parts.Add("has art.bundle");
         else if (art.NeedsBundleExtract)
-            parts.Add("prefab → extract on export");
+        {
+            var src = _projectStore.ResolveSourceBundlePath(art.SourceBundlePath, repairImports: false);
+            parts.Add(src == null
+                ? $"missing source {art.SourceBundlePath}"
+                : $"Export will extract {art.SourcePrefabName} → art.bundle");
+        }
         else if (art.IncludeMesh && ProjectStore.ResolveArtAbsolutePath(item, art.MeshPath) != null)
-            parts.Add("FBX attached (optional compile)");
+            parts.Add("Export will compile FBX → art.bundle");
         else
-            parts.Add("scripts/properties (no mesh required)");
+            parts.Add("no custom art (hooks only)");
         if (art.IncludeIcon && ProjectStore.ResolveArtAbsolutePath(item, art.IconPath) != null)
             parts.Add("icon");
         return string.Join(" · ", parts);

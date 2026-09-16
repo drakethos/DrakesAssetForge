@@ -220,6 +220,47 @@ public sealed class ProjectStore
         return File.Exists(full) ? full : null;
     }
 
+    /// <summary>
+    /// Resolves an import source bundle (Imports/… or mod-style Assets/&lt;name&gt; without extension).
+    /// When the mod lives in the same folder as the project, copies Assets/&lt;name&gt; into Imports/ if needed.
+    /// </summary>
+    public string? ResolveSourceBundlePath(string? relativeSourcePath, bool repairImports = true)
+    {
+        var direct = ResolveProjectRelativePath(relativeSourcePath);
+        if (direct != null)
+            return direct;
+
+        if (string.IsNullOrWhiteSpace(relativeSourcePath))
+            return null;
+
+        var normalized = relativeSourcePath.Replace('\\', '/');
+        if (!normalized.StartsWith("Imports/", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var fileName = Path.GetFileName(normalized);
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        if (string.IsNullOrWhiteSpace(stem))
+            return null;
+
+        // LockSmith-style: project root is the mod repo; shipped bundles are Assets/drake, Assets/ploam (no extension).
+        var modAsset = Path.Combine(ProjectRoot, "Assets", stem);
+        if (!File.Exists(modAsset))
+            return null;
+
+        if (!repairImports)
+            return modAsset;
+
+        try
+        {
+            var rel = ImportSourceBundle(modAsset);
+            return ResolveProjectRelativePath(rel);
+        }
+        catch
+        {
+            return modAsset;
+        }
+    }
+
     /// <summary>Creates an owned item folder (scripts optional). Used by bundle / mod imports.</summary>
     public OwnedItemDocument CreateImportedItem(
         string preferredId,

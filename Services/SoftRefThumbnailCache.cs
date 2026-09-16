@@ -76,18 +76,25 @@ public sealed class SoftRefThumbnailCache
         var resolve = _resolveBundle;
         var all = _allAssets;
         var art = store.LoadArt(item);
-        var iconFile = ProjectStore.ResolveArtAbsolutePath(item, art.IconPath);
         var donorName = item.Donor.PrefabName;
+        var allowDonorThumb = !item.Donor.Kind.Equals("Imported", StringComparison.OrdinalIgnoreCase);
+        ProjectStore storeCapture = store;
+        OwnedItemDocument itemCapture = item;
+        ArtDocument artCapture = art;
 
         _ = Task.Run(() =>
         {
             Bitmap? bmp = null;
             try
             {
-                if (iconFile != null)
-                    bmp = LoadFileBitmap(iconFile);
-                else if (!string.IsNullOrWhiteSpace(donorName))
+                var custom = OwnedArtPreview.Resolve(storeCapture, itemCapture, artCapture);
+                if (custom.Bitmap != null)
+                    bmp = custom.Bitmap;
+                else if (allowDonorThumb &&
+                         custom.UsedDonorFallback &&
+                         !string.IsNullOrWhiteSpace(donorName))
                 {
+                    // SoftRef donor only for true SoftRef clones — never LeatherScraps on imports.
                     var donor = all.FirstOrDefault(a =>
                         a.Kind == CatalogKind.ItemPrefab &&
                         a.DisplayName.Equals(donorName, StringComparison.OrdinalIgnoreCase));
@@ -112,7 +119,17 @@ public sealed class SoftRefThumbnailCache
 
     public void InvalidateOwned(string itemId)
     {
-        _byKey.TryRemove("owned:" + itemId, out _);
+        if (_byKey.TryRemove("owned:" + itemId, out var bmp))
+            bmp?.Dispose();
+    }
+
+    public void InvalidateAllOwned()
+    {
+        foreach (var key in _byKey.Keys.Where(k => k.StartsWith("owned:", StringComparison.OrdinalIgnoreCase)).ToList())
+        {
+            if (_byKey.TryRemove(key, out var bmp))
+                bmp?.Dispose();
+        }
     }
 
     private static Bitmap? LoadCatalogBitmap(
@@ -132,12 +149,6 @@ public sealed class SoftRefThumbnailCache
 
         var result = SoftRefPreviewService.PreviewTextureByContainerPath(bundlePath, iconAsset.PathInBundle);
         return result.Error == null ? result.Bitmap : null;
-    }
-
-    private static Bitmap? LoadFileBitmap(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return new Bitmap(stream);
     }
 
     private static bool IsTexturePath(SoftRefAssetEntry asset) =>

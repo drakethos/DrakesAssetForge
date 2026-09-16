@@ -1,5 +1,7 @@
 # Drake Asset Forge — testable chunks
 
+**Release track:** `0.2.x` = A–C2b usable (spy → project → art export). `1.0` waits on C3 + polish.
+
 Mapped to the UI flow canvas (`drake-asset-forge-ui-flow`): **Spy vs Work**, one shell, three panes.
 
 ```
@@ -89,15 +91,16 @@ Spy in Catalog → Pin/select donor → Clone → Project work → Export
 - Bundle main asset is a prefab named `art` (imported model saved as a prefab, not the raw FBX). No Valheim scripts or shaders
 - Smoke plugin loads prefab `art` and parents it on the clone, hiding the donor renderers
 
-**Test:** Project item with an FBX → Export → Compile art bundle → `art.bundle` appears → rebuild smoke → `spawn <id>` uses the custom mesh.
+**Test:** Project item with an FBX → Export → `art.bundle` appears + wired into code project → rebuild smoke → `spawn <id>` uses the custom mesh.
 
 ### C3 — Full export (was Chunk 6)
 - Generate Jotunn mod folder (C# + bundle + csproj)
 
-### C2b — Project open/save + bundle import + optional art (done)
+### C2b — Project open/save + bundle import + Export = bundle+wire (done)
 - File → New / Open / Save Project As (folder + `project.json`); Export/Import `.daf` zip
-- Import Asset Bundle(s) / Mod Items folder → owned items (skip SoftRef vanilla names); opaque `art.bundle` round-trip; fat bundles → Extract via Unity
-- Sync always ships `item.json`; `ArtItemLoader` registers without requiring `art.bundle`
+- Import Asset Bundle(s) / Mod Items folder → owned items (skip SoftRef vanilla names for bulk); opaque `art.bundle` round-trip; fat bundles → Extract via Unity on Export
+- **Export** makes `art.bundle` (extract/compile as needed) then wires `Assets/Items` + hooks; imported/modified content ships; SoftRef catalog is never bulk-dumped
+- Pure donor + scripts items may ship without `art.bundle`; `ArtItemLoader` still registers them
 
 ## Explicit non-goals until noted
 

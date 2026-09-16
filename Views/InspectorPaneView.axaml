@@ -287,7 +287,7 @@
                                     Command="{Binding ExtractSelectedBundleCommand}"
                                     IsVisible="{Binding NeedsBundleExtract}"
                                     IsEnabled="{Binding !IsBusy}" />
-                            <Button Content="Compile art bundle"
+                            <Button Content="Rebuild art.bundle"
                                     Command="{Binding CompileArtBundleCommand}"
                                     IsEnabled="{Binding !IsArtCompileBusy}" />
                             <Button Content="Remove compiled bundle"
@@ -298,9 +298,9 @@
                         </StackPanel>
                         <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
                                    IsVisible="{Binding NeedsBundleExtract}"
-                                   Text="This item came from a multi-prefab Unity Assets bundle. Extract pulls its prefab into a standard art.bundle (needs Unity on the Export screen). Or File → Extract all pending." />
+                                   Text="Imported pack item (e.g. from Assets/drake). Export pulls its prefab into a clean art.bundle via Unity — you do not need to attach an FBX." />
                         <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
-                                   Text="Unchecked pieces stay on disk but are left out of the next sync. Diffuse only leaves art.bundle after you compile again. Remove compiled bundle deletes the shipped mesh now." />
+                                   Text="Export extracts your prefabs from imported packs into art.bundle (mesh only — Valheim scripts stay out). Attach FBX only for brand-new art. SoftRef catalog is never bulk-dumped." />
 
                         <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
                                    Text="Browse auto-saves art.json into the item folder. Look for art/mesh.fbx, art/icon.png beside item.json." />

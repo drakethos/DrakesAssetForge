@@ -110,12 +110,12 @@
                     BorderBrush="#44888888" BorderThickness="1" CornerRadius="6" Padding="16">
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="10" MaxWidth="960">
-                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Export to mod" />
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="Export" />
                     <TextBlock TextWrapping="Wrap" Text="{Binding ExportStubNote}" />
 
                     <TextBlock FontSize="16" FontWeight="SemiBold" Text="Folders &amp; items" />
                     <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                               Text="Grouped by Project folder. Check a folder to include everything in it, then uncheck individuals. Sync always ships item.json + hooks; art.bundle is copied when present (no FBX compile required)." />
+                               Text="Grouped by Project folder. Check a folder to include everything, then uncheck individuals. Export makes art.bundle for each checked item that needs one, then wires Assets/Items + hooks into the code project." />
                     <TextBlock FontWeight="SemiBold" Text="{Binding ExportIncludeSummary}" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Button Content="Select all" Command="{Binding ExportSelectAllCommand}" />
@@ -149,35 +149,34 @@
                         </TreeView>
                     </Border>
 
-                    <TextBlock FontSize="16" FontWeight="SemiBold" Text="Valheim project" />
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Text="Code project" />
                     <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                               Text="Export to mod copies checked folders/items into Assets/Items/… and regenerates ArtItemHooks.g.cs. Prefabs in art.bundle ship as-is — Valheim donor assets are never dumped into the bundle." />
+                               Text="Target Valheim mod folder (e.g. DrakesAssetForgeTest). Project folders export as Assets/Items/&lt;folder&gt;/&lt;folder&gt;.bundle + &lt;item&gt;.json. SoftRef/Valheim catalog is never bulk-dumped — imported or user-modified prefabs are your content and do ship." />
                     <TextBox Text="{Binding ValheimProjectPath}" PlaceholderText="Path to DrakesAssetForgeTest" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Button Content="Browse project…" Command="{Binding BrowseValheimProjectCommand}" />
-                        <Button Content="Export to mod" Command="{Binding SyncValheimProjectCommand}" />
+                        <Button Content="Export"
+                                Command="{Binding ExportToModCommand}"
+                                IsEnabled="{Binding !IsArtCompileBusy}" />
                     </StackPanel>
                     <TextBlock Opacity="0.75" TextWrapping="Wrap" Text="{Binding ValheimProjectStatus}" />
 
-                    <Border BorderBrush="#33888888" BorderThickness="1" CornerRadius="4" Padding="12" Margin="0,8,0,0">
-                        <StackPanel Spacing="8">
-                            <TextBlock FontSize="14" FontWeight="SemiBold" Text="Optional · Unity art tools" />
-                            <TextBlock Opacity="0.7" FontSize="12" TextWrapping="Wrap"
-                                       Text="Only needed to pack an FBX into art.bundle, or to extract a named prefab from a multi-prefab import. Imported single-prefab bundles already have art.bundle — just Export to mod." />
-                            <TextBlock Opacity="0.75" TextWrapping="Wrap"
-                                       Text="{Binding RequiredUnityVersion, StringFormat=Valheim Unity: {0}}" />
-                            <TextBlock TextWrapping="Wrap" Text="{Binding UnityStatus}" />
-                            <TextBox Text="{Binding UnityEditorPath}" PlaceholderText="Path to Unity.exe" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="Browse Unity…" Command="{Binding BrowseUnityEditorCommand}" />
-                                <Button Content="Compile FBX → art.bundle"
-                                        Command="{Binding CompileArtBundleCommand}"
-                                        IsEnabled="{Binding !IsArtCompileBusy}" />
-                            </StackPanel>
-                            <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap"
-                                       Text="{Binding SelectedOwnedItem.DisplayName, StringFormat=Selected item for FBX compile: {0}}" />
-                        </StackPanel>
-                    </Border>
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Text="Unity (for making art.bundles)" />
+                    <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                               Text="Required when Export pulls prefabs out of an imported multi-prefab pack (e.g. LockSmith Assets/drake) or compiles an attached FBX. You do not need to attach FBX for imported pack items — Export extracts them." />
+                    <TextBlock Opacity="0.75" TextWrapping="Wrap"
+                               Text="{Binding RequiredUnityVersion, StringFormat=Valheim Unity: {0}}" />
+                    <TextBlock TextWrapping="Wrap" Text="{Binding UnityStatus}" />
+                    <TextBox Text="{Binding UnityEditorPath}" PlaceholderText="Path to Unity.exe" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="Browse Unity…" Command="{Binding BrowseUnityEditorCommand}" />
+                        <Button Content="Rebuild selected art.bundle"
+                                Command="{Binding CompileArtBundleCommand}"
+                                IsEnabled="{Binding !IsArtCompileBusy}"
+                                ToolTip.Tip="Only for items with an attached FBX. Imported pack items use Export (extract from source bundle)." />
+                    </StackPanel>
+                    <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap"
+                               Text="{Binding SelectedOwnedItem.DisplayName, StringFormat=Selected item: {0}}" />
 
                     <Button Content="Back to Project"
                             HorizontalAlignment="Left"

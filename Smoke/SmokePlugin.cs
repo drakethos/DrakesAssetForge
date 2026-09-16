@@ -24,7 +24,7 @@ public sealed class SmokePlugin : BaseUnityPlugin
 {
     public const string Guid = "com.drakesworkshop.assetforgesmoke";
     public const string Name = "DrakesAssetForgeSmoke";
-    public const string Version = "0.1.0";
+    public const string Version = "0.2.0";
 
     internal static ManualLogSource Log = null!;
 

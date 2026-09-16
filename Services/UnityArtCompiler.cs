@@ -28,6 +28,13 @@ public sealed class UnityArtExtractRequest
     public required string BundleName { get; init; }
 }
 
+public sealed class UnityArtPackFolderRequest
+{
+    public required string OutputBundlePath { get; init; }
+    public required string BundleName { get; init; }
+    public required IReadOnlyList<(string SourceArtBundle, string PrefabName, string? DiffusePath)> Entries { get; init; }
+}
+
 /// <summary>
 /// Copies the shipped Unity template to LocalAppData and runs Unity batchmode.
 /// The template never contains Valheim assets or Valheim shaders.
@@ -280,6 +287,102 @@ public static class UnityArtCompiler
             BundlePath = request.OutputBundlePath,
             LogPath = logPath,
             Message = $"Extracted art.bundle ({size:N0} bytes) from '{request.PrefabName}'.",
+        };
+    }
+
+    public static async Task<UnityArtCompileResult> PackFolderAsync(
+        string unityExe,
+        string templateSource,
+        UnityArtPackFolderRequest request,
+        IProgress<string>? progress,
+        CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(unityExe))
+            return Fail($"Unity.exe not found: {unityExe}");
+        if (!Directory.Exists(templateSource))
+            return Fail($"Unity template missing: {templateSource}");
+        if (request.Entries.Count == 0)
+            return Fail("PackFolder has no entries.");
+
+        foreach (var (source, name, _) in request.Entries)
+        {
+            if (!File.Exists(source))
+                return Fail($"Missing per-item art.bundle for '{name}': {source}");
+        }
+
+        var editor = ReadEditorIdentity(unityExe);
+        progress?.Report($"Preparing Unity pack for {request.BundleName}.bundle…");
+        PrepareProject(templateSource, editor);
+
+        var outputDir = Path.Combine(CompilerRoot, "out");
+        if (Directory.Exists(outputDir))
+            Directory.Delete(outputDir, true);
+        Directory.CreateDirectory(outputDir);
+
+        var job = new
+        {
+            outputDirectory = outputDir.Replace('\\', '/'),
+            bundleName = request.BundleName.ToLowerInvariant(),
+            entries = request.Entries.Select(e => new
+            {
+                sourceBundle = e.SourceArtBundle.Replace('\\', '/'),
+                prefabName = e.PrefabName,
+                diffusePath = string.IsNullOrWhiteSpace(e.DiffusePath) ? "" : e.DiffusePath!.Replace('\\', '/'),
+            }).ToArray(),
+        };
+        await File.WriteAllTextAsync(
+            Path.Combine(CompilerRoot, "pack-folder-job.json"),
+            JsonSerializer.Serialize(job, JsonOptions),
+            cancellationToken);
+
+        var logPath = Path.Combine(CompilerRoot, "Logs", "pack-folder.log");
+        Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+        if (File.Exists(logPath))
+            File.Delete(logPath);
+
+        progress?.Report($"Unity packing {request.Entries.Count} prefab(s) into {request.BundleName}.bundle…");
+
+        var start = new ProcessStartInfo(unityExe)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        start.ArgumentList.Add("-batchmode");
+        start.ArgumentList.Add("-nographics");
+        start.ArgumentList.Add("-quit");
+        start.ArgumentList.Add("-projectPath");
+        start.ArgumentList.Add(CompilerRoot);
+        start.ArgumentList.Add("-buildTarget");
+        start.ArgumentList.Add("StandaloneWindows64");
+        start.ArgumentList.Add("-logFile");
+        start.ArgumentList.Add(logPath);
+        start.ArgumentList.Add("-executeMethod");
+        start.ArgumentList.Add("DrakesAssetForge.ArtBuild.ArtBundleBuilder.PackFolder");
+
+        using var process = Process.Start(start)
+                            ?? throw new InvalidOperationException("Failed to start Unity.");
+        await process.WaitForExitAsync(cancellationToken);
+
+        var built = Path.Combine(outputDir, request.BundleName.ToLowerInvariant());
+        if (process.ExitCode != 0 || !File.Exists(built))
+        {
+            return new UnityArtCompileResult
+            {
+                Success = false,
+                LogPath = logPath,
+                Message = $"Unity PackFolder exited {process.ExitCode}. {TailLog(logPath)}",
+            };
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(request.OutputBundlePath)!);
+        File.Copy(built, request.OutputBundlePath, overwrite: true);
+        var size = new FileInfo(request.OutputBundlePath).Length;
+        return new UnityArtCompileResult
+        {
+            Success = true,
+            BundlePath = request.OutputBundlePath,
+            LogPath = logPath,
+            Message = $"Packed {request.BundleName}.bundle ({size:N0} bytes) with {request.Entries.Count} prefab(s).",
         };
     }
 

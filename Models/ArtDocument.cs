@@ -19,7 +19,7 @@ public sealed class ArtDocument
     /// <summary>Uniform scale applied to the art prefab when it is parented onto the clone.</summary>
     public float Scale { get; set; } = 1f;
 
-    /// <summary>When false, the compiled mesh bundle is not copied to the mod. Missing means include.</summary>
+    /// <summary>When false, FBX is left out of the next art.bundle compile. Missing means include.</summary>
     public bool IncludeMesh { get; set; } = true;
 
     /// <summary>When false, icon.png is not copied to the mod. Missing means include.</summary>
@@ -29,7 +29,13 @@ public sealed class ArtDocument
     public bool IncludeDiffuse { get; set; } = true;
 
     /// <summary>
-    /// When false, Sync / hook codegen skips this item. Missing in older art.json means include.
+    /// When true, Export ships <c>useDonorVisual</c> and the runtime loader keeps the donor mesh
+    /// (e.g. CryptKey) instead of overlaying art.bundle.
+    /// </summary>
+    public bool UseDonorVisual { get; set; }
+
+    /// <summary>
+    /// When false, Export / hook codegen skips this item. Missing in older art.json means include.
     /// </summary>
     public bool IncludeInExport { get; set; } = true;
 

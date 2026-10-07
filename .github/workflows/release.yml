@@ -1,13 +1,15 @@
 name: Release
 
 # One repo, two release trains, picked by tag:
-#   app-v1.2.3      → Drakes Asset Forge (desktop app): portable win-x64 zip + Hexium/Gale
-#                     Thunderstore-format zip (exe + icon + manifest, Tools/Modpack) → GitHub Release;
-#                     Hexium upload when PUBLISH_HEXIUM is 'true'.
+#   app-v1.2.3      → Drakes Asset Forge (desktop TOOL): portable win-x64 zip + Hexium/Gale
+#                     Thunderstore-format zip (exe + icon + README/screenshots + manifest, Tools) →
+#                     GitHub Release; Hexium upload when PUBLISH_HEXIUM or PUBLISH_HEXIUM_APP is 'true'.
 #   runtime-v1.2.3  → Drakes Forge Runtime (BepInEx mod) Thunderstore zip → GitHub Release,
-#                     then Thunderstore / Hexium only when PUBLISH_THUNDERSTORE / PUBLISH_HEXIUM are 'true'.
+#                     then Thunderstore when PUBLISH_THUNDERSTORE is 'true',
+#                     Hexium only when PUBLISH_HEXIUM_RUNTIME is 'true' (occasional — not tied to app tags).
 # GitHub releases are created as drafts: review them on the Releases page, then press "Publish release".
 # The tag's version must equal <Version> in the project file.
+# App Tools packages pin FORGE_RUNTIME_DEP_VERSION (do not bump Runtime just to ship a Tools zip).
 
 on:
   push:
@@ -22,6 +24,8 @@ env:
   PFHOENIX_VERSION: "1.0.23"
   JOTUNN_VERSION: "2.30.2"
   BEPINEXPACK: "denikson-BepInExPack_Valheim-5.4.2351"
+  # Published Runtime the Tools/app package depends on. Bump only when Runtime itself changes.
+  FORGE_RUNTIME_DEP_VERSION: "0.2.1"
 
 jobs:
   test:
@@ -83,25 +87,29 @@ jobs:
           python -c "import shutil; shutil.make_archive('$name', 'zip', 'dist/app')"
           "zip=$name.zip" >> $env:GITHUB_OUTPUT
 
-      # Thunderstore/Hexium-compatible package: runnable exe + 256x256 icon + manifest (Tools / Modpack).
-      - name: Hexium / Gale package
+      # Thunderstore/Hexium Tools package: runnable exe + 256x256 icon + README/screenshots + manifest.
+      - name: Hexium / Gale Tools package
         id: hexium
         run: |
           $version = "${{ steps.ver.outputs.version }}"
-          $description = "Desktop app (exe) to make Valheim items, pieces and reskins without Unity. Install via Gale/Hexium, run DrakesAssetForge.exe from the profile plugins folder."
-          if ($description.Length -gt 256) { Write-Error "description too long"; exit 1 }
+          $runtimeDep = $env:FORGE_RUNTIME_DEP_VERSION
+          $description = "TOOL (Windows exe) to create Valheim items, pieces and reskins without Unity. Not a gameplay mod - authors run DrakesAssetForge.exe; publish content packs separately."
+          if ($description.Length -gt 256) { Write-Error "description too long ($($description.Length))"; exit 1 }
           New-Item -ItemType Directory -Force pkg-app | Out-Null
           Copy-Item -Path dist/app/* -Destination pkg-app -Recurse -Force
           Copy-Item Forge/App/thunderstore/icon.png, Forge/App/thunderstore/README.md, CHANGELOG.md pkg-app/ -Force
+          New-Item -ItemType Directory -Force pkg-app/screenshots | Out-Null
+          Copy-Item Forge/App/thunderstore/screenshots/* pkg-app/screenshots/ -Force
           if (-not (Test-Path pkg-app/DrakesAssetForge.exe)) { Write-Error "Hexium package missing DrakesAssetForge.exe"; exit 1 }
           if (-not (Test-Path pkg-app/icon.png)) { Write-Error "Hexium package missing icon.png"; exit 1 }
+          if (-not (Test-Path pkg-app/screenshots/1-browse.png)) { Write-Error "Hexium package missing screenshots"; exit 1 }
           [ordered]@{
             name = "DrakesAssetForge"
             version_number = $version
             website_url = "https://github.com/${{ github.repository }}"
             description = $description
             dependencies = @(
-              "DrakeMods-DrakesForgeRuntime-$version",
+              "DrakeMods-DrakesForgeRuntime-$runtimeDep",
               "ValheimModding-Jotunn-$env:JOTUNN_VERSION"
             )
           } | ConvertTo-Json | Set-Content pkg-app/manifest.json -Encoding utf8NoBOM
@@ -122,16 +130,17 @@ jobs:
           body: |
             ## Drakes Asset Forge ${{ steps.ver.outputs.version }}
 
-            Make Valheim items, build pieces and reskins without Unity. Windows, no .NET install needed.
+            Desktop **TOOL** to make Valheim items, build pieces and reskins without Unity. Windows, no .NET install needed.
+            Content packs / mods you create are separate packages; this zip is the authoring app itself.
 
             ### Portable
             **Download** `${{ steps.zip.outputs.zip }}`, unzip anywhere, run `DrakesAssetForge.exe`.
 
-            ### Hexium / Gale (exe + icon + modpack package)
+            ### Hexium / Gale (Tools package)
             Import **`${{ steps.hexium.outputs.zip }}`** (or install from Hexium when published).
             Gale places it under `BepInEx/plugins/DrakeMods-DrakesAssetForge/` — run `DrakesAssetForge.exe` from there.
-            The package depends on **Forge Runtime** + Jotunn so the profile is ready for push/test.
-            Categories: **Tools**, **Modpack**, **Valheim 1.0**.
+            Depends on published **Forge Runtime** `${{ env.FORGE_RUNTIME_DEP_VERSION }}` + Jotunn (Runtime is not re-released with every Tools update).
+            Categories: **Tools**, **Valheim 1.0**, **Open Source**.
 
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md).
 
@@ -146,7 +155,7 @@ jobs:
     if: |
       always()
       && needs.app.result == 'success'
-      && vars.PUBLISH_HEXIUM == 'true'
+      && (vars.PUBLISH_HEXIUM == 'true' || vars.PUBLISH_HEXIUM_APP == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -154,7 +163,7 @@ jobs:
         with:
           name: app-hexium-zip
           path: dist
-      - name: Publish app package to Hexium
+      - name: Publish Tools package to Hexium
         env:
           HEXIUM_TOKEN: ${{ secrets.HEXIUM_TOKEN }}
           ZIP_NAME: ${{ needs.app.outputs.hexium_zip }}
@@ -169,7 +178,7 @@ jobs:
             --repository "https://valheim.hexium.gg" \
             --namespace "DrakeMods" \
             --communities "valheim" \
-            --categories "Tools,Modpack,Valheim 1.0,Open Source"
+            --categories "Tools,Valheim 1.0,Open Source"
 
   # ── Forge Runtime (BepInEx mod) ──────────────────────────────────────────────
   runtime:
@@ -275,55 +284,30 @@ jobs:
           categories: |
             libraries
 
-  publish-hexium:
+  # Runtime Hexium uploads are intentional/occasional — require PUBLISH_HEXIUM_RUNTIME (not the shared app flag).
+  publish-hexium-runtime:
     needs: runtime
-    if: vars.PUBLISH_HEXIUM == 'true'
+    if: vars.PUBLISH_HEXIUM_RUNTIME == 'true'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: runtime-zip
           path: dist
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-      - name: Install tcli
-        run: dotnet tool install -g tcli
-      - name: Publish to Hexium
+      - name: Publish Runtime to Hexium
         env:
-          VERSION: ${{ needs.runtime.outputs.version }}
-          DESCRIPTION: ${{ needs.runtime.outputs.description }}
-          ZIP_NAME: ${{ needs.runtime.outputs.zip }}
           HEXIUM_TOKEN: ${{ secrets.HEXIUM_TOKEN }}
-          WEBSITE_URL: https://github.com/${{ github.repository }}
+          ZIP_NAME: ${{ needs.runtime.outputs.zip }}
         run: |
           set -euo pipefail
           if [ -z "${HEXIUM_TOKEN}" ]; then
             echo "::error::HEXIUM_TOKEN secret is not set" >&2
             exit 1
           fi
-          DESC_ESC=$(printf '%s' "$DESCRIPTION" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read())[1:-1])')
-          # Check Hexium's category names before enabling PUBLISH_HEXIUM.
-          cat > thunderstore.toml <<EOF
-          [config]
-          schemaVersion = "0.0.1"
-
-          [package]
-          namespace = "DrakeMods"
-          name = "DrakesForgeRuntime"
-          versionNumber = "${VERSION}"
-          description = "${DESC_ESC}"
-          websiteUrl = "${WEBSITE_URL}"
-          containsNsfwContent = false
-
-          [publish]
-          repository = "https://valheim.hexium.gg"
-          communities = ["valheim"]
-
-          [publish.categories]
-          valheim = ["Libraries", "Valheim 1.0"]
-          EOF
-          sed -i 's/^          //' thunderstore.toml
-          cat thunderstore.toml
-          export PATH="$PATH:$HOME/.dotnet/tools"
-          tcli publish --config-path thunderstore.toml --file "dist/${ZIP_NAME}" --token "${HEXIUM_TOKEN}"
+          python3 .github/scripts/publish-hexium.py \
+            --file "dist/${ZIP_NAME}" \
+            --repository "https://valheim.hexium.gg" \
+            --namespace "DrakeMods" \
+            --communities "valheim" \
+            --categories "Libraries,Valheim 1.0"

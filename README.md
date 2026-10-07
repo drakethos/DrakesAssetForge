@@ -132,14 +132,12 @@ One workflow, two release trains, picked by tag (version must match the project 
 
 | Tag | Builds | Publishes |
 |---|---|---|
-| `app-v0.2.1` | Portable win-x64 zip **and** Hexium/Gale package (`DrakesAssetForge.exe` + icon + manifest, Tools/Modpack) | GitHub Release (draft); Hexium when `PUBLISH_HEXIUM=true` |
-| `runtime-v0.2.1` | `Forge/Runtime` Thunderstore package | GitHub Release (draft); Thunderstore and Hexium only when enabled |
+| `app-v0.2.1` | Portable win-x64 zip **and** Hexium/Gale **Tools** zip (`DrakeMods-DrakesAssetForge-…`, exe + icon + README/screenshots) | GitHub Release (draft); Hexium when `PUBLISH_HEXIUM` or `PUBLISH_HEXIUM_APP` is `true` |
+| `runtime-v0.2.1` | `Forge/Runtime` Thunderstore package | GitHub Release (draft); Thunderstore when `PUBLISH_THUNDERSTORE=true`; Hexium only when `PUBLISH_HEXIUM_RUNTIME=true` (occasional — not tied to every Tools/app tag) |
 
 GitHub releases are created as **drafts**: check the notes and files on the Releases page, then press *Publish release*.
 
-Store uploads are off until you turn them on with repository variables `PUBLISH_THUNDERSTORE=true` /
-`PUBLISH_HEXIUM=true` (secrets `THUNDERSTORE_TOKEN`, `HEXIUM_TOKEN`). App Hexium upload uses
-`.github/scripts/publish-hexium.py` (same as LockSmith / RenameIt).
+The Tools package pins `FORGE_RUNTIME_DEP_VERSION` in `.github/workflows/release.yml` so app releases do not force a Runtime republish. Secrets: `THUNDERSTORE_TOKEN`, `HEXIUM_TOKEN`. Manual upload of the Tools zip is fine — store publish jobs are optional. App Hexium upload uses `.github/scripts/publish-hexium.py`.
 
 ## License
 

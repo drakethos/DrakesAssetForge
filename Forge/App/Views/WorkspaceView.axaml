@@ -152,7 +152,8 @@
                     </StackPanel>
                 </StackPanel>
                 <Panel>
-                    <ListBox IsVisible="{Binding LibPack}" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Margin="6,0">
+                    <ListBox IsVisible="{Binding LibPack}" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Margin="6,0"
+                             ContextRequested="OnPackListContextRequested">
                         <ListBox.KeyBindings>
                             <KeyBinding Gesture="Ctrl+D" Command="{Binding DuplicateCommand}" />
                             <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />

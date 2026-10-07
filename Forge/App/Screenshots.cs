@@ -276,6 +276,19 @@ internal static class Screenshots
             Console.WriteLine("after duplicate/paste: " + string.Join(", ", vm.Pack!.Recipes.Where(r => r.Id.StartsWith("screens_banner_pole")).Select(r => $"{r.Id} '{r.Name}' sprites={r.Look.Sprites.Count}")));
             Save(window, outDir, "8b-duplicate");
 
+            // Remove the open item while an edit is still waiting to autosave: it must stay gone.
+            vm.Workspace.Selected = vm.Workspace.Items.FirstOrDefault(i => i.Recipe.Id == "screens_banner_pole_copy2");
+            await Settle(window, 800);
+            if (vm.Workspace.Editor is { } doomed)
+            {
+                doomed.Name = "Edited before removal";
+                var doomedPath = vm.Pack!.RecipePath(doomed.Recipe);
+                vm.Workspace.DeleteSelectedCommand.Execute(null);
+                await Settle(window, 1500);
+                Console.WriteLine($"remove check: in pack={vm.Pack.Recipes.Any(r => r.Id == "screens_banner_pole_copy2")}, " +
+                                  $"in list={vm.Workspace.Items.Any(i => i.Recipe.Id == "screens_banner_pole_copy2")}, file exists={File.Exists(doomedPath)}");
+            }
+
             // Snap tool on a "paper" piece: floor base hidden, a standing sprite, auto-detected points, one dragged up.
             var paper = new Format.ItemRecipe { Id = "screens_paper", Base = "wood_floor_1x1", Kind = Format.RecipeKind.Piece, Name = "Paper" };
             vm.Pack!.SaveRecipe(paper);

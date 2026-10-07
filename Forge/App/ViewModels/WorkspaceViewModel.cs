@@ -137,8 +137,16 @@ public sealed partial class WorkspaceViewModel : ObservableObject
     {
         if (Selected == null || _main.Pack == null)
             return;
-        _main.Pack.DeleteRecipe(Selected.Recipe);
-        _main.RecipeSaved($"removed {Selected.Recipe.Id}");
+
+        var recipe = Selected.Recipe;
+        // Drop the open editor without saving first: Reload() and switching selection save the editor,
+        // which would recreate the file and put the item straight back on the list.
+        Editor?.DiscardPendingSave();
+        Editor = null;
+        Selected = null;
+
+        _main.Pack.DeleteRecipe(recipe);
+        _main.RecipeSaved($"removed {recipe.Id}");
         Reload();
     }
 

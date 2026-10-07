@@ -824,11 +824,15 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         _saveTimer.Start();
     }
 
+    /// <summary>Stops the autosave timer without writing. Used when the recipe is being deleted.</summary>
+    public void DiscardPendingSave() => _saveTimer.Stop();
+
     /// <summary>Writes the editor state into the recipe and saves it.</summary>
     public void SaveNow()
     {
         _saveTimer.Stop();
-        if (Pack == null || _loading)
+        // A recipe removed from the pack must stay removed: saving would recreate its file.
+        if (Pack == null || _loading || !Pack.Recipes.Contains(Recipe))
             return;
 
         Recipe.Name = string.IsNullOrWhiteSpace(Name) ? null : Name.Trim();

@@ -20,6 +20,7 @@ internal static class ForgeLite
     internal static string AssetsFolder = "";
 
     private static readonly Dictionary<string, Texture2D> Textures = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, Sprite> Sprites = new(StringComparer.OrdinalIgnoreCase);
 
     // Unity 6 adds a ReadOnlySpan overload net481 can't compile against; bind the byte[] one explicitly.
     private static readonly Func<Texture2D, byte[], bool> LoadImage = (Func<Texture2D, byte[], bool>)Delegate.CreateDelegate(
@@ -28,23 +29,27 @@ internal static class ForgeLite
 
     // ---- textures & icons ----
 
+    /// <summary>
+    /// An image by its pack path ("textures/x.png"): from inside this DLL if it was embedded, else from Assets\,
+    /// else a file with that name anywhere beside the DLL (mod managers sometimes flatten folders).
+    /// </summary>
     /// <param name="normalMap">Linear, and repacked to Unity's (A = x, G = y) layout, since a PNG isn't imported as a normal map at runtime.</param>
     internal static Texture2D? Texture(string file, bool normalMap = false)
     {
         var key = normalMap ? file + "|normal" : file;
         if (Textures.TryGetValue(key, out var cached))
             return cached;
-        var path = Path.Combine(AssetsFolder, file);
-        if (!File.Exists(path))
+        var bytes = ReadImage(file);
+        if (bytes == null)
         {
-            Logger.LogWarning($"Missing texture {path}");
+            Logger.LogWarning($"Missing image {file}");
             return null;
         }
 
-        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, true, normalMap) { name = Path.GetFileNameWithoutExtension(path) };
-        if (!LoadImage(texture, File.ReadAllBytes(path)))
+        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, true, normalMap) { name = Path.GetFileNameWithoutExtension(file) };
+        if (!LoadImage(texture, bytes))
         {
-            Logger.LogWarning($"{path} is not a readable PNG or JPG");
+            Logger.LogWarning($"{file} is not a readable PNG or JPG");
             return null;
         }
 
@@ -61,12 +66,48 @@ internal static class ForgeLite
         return texture;
     }
 
-    internal static void Icon(GameObject prefab, string file)
+    private static byte[]? ReadImage(string file)
     {
+        var leaf = Path.GetFileName(file.Replace('\\', '/'));
+        var assembly = typeof(ForgeLite).Assembly;
+        var resource = assembly.GetManifestResourceNames().FirstOrDefault(n => n.Equals(leaf, StringComparison.OrdinalIgnoreCase) ||
+                                                                               n.EndsWith("." + leaf, StringComparison.OrdinalIgnoreCase));
+        if (resource != null)
+        {
+            using var stream = assembly.GetManifestResourceStream(resource);
+            if (stream != null)
+            {
+                using var memory = new MemoryStream();
+                stream.CopyTo(memory);
+                return memory.ToArray();
+            }
+        }
+
+        var exact = Path.Combine(AssetsFolder, file);
+        if (File.Exists(exact))
+            return File.ReadAllBytes(exact);
+        var dir = Path.GetDirectoryName(assembly.Location);
+        var found = string.IsNullOrEmpty(dir) || !Directory.Exists(dir) ? null : Directory.EnumerateFiles(dir, leaf, SearchOption.AllDirectories).FirstOrDefault();
+        return found != null ? File.ReadAllBytes(found) : null;
+    }
+
+    /// <summary>The image as a centred sprite (icons). Cached.</summary>
+    internal static Sprite? IconSprite(string file)
+    {
+        if (Sprites.TryGetValue(file, out var cached))
+            return cached;
         if (Texture(file) is not { } texture)
-            return;
+            return null;
         var sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
         sprite.name = texture.name;
+        Sprites[file] = sprite;
+        return sprite;
+    }
+
+    internal static void Icon(GameObject prefab, string file)
+    {
+        if (IconSprite(file) is not { } sprite)
+            return;
         if (prefab.GetComponent<ItemDrop>() is { } drop)
             drop.m_itemData.m_shared.m_icons = new[] { sprite };
         else if (prefab.GetComponent<Piece>() is { } piece)
@@ -226,16 +267,16 @@ internal static class ForgeLite
     /// A flat image: pivot at its bottom centre, facing +Z (forward) before rotation, alpha cut out. Two-sided adds a mirrored
     /// back face so text reads correctly from behind.
     /// </summary>
-    internal static void AddSprite(GameObject prefab, string file, float width, float height, Vector3 position, Vector3 rotation, bool doubleSided)
+    internal static void AddSprite(Transform parent, string file, float width, float height, Vector3 position, Vector3 rotation, bool doubleSided)
     {
         if (Texture(file) is not { } texture)
             return;
         texture.wrapMode = TextureWrapMode.Clamp;
-        var root = prefab.transform.Find("forge_sprites")?.gameObject;
+        var root = parent.Find("forge_sprites")?.gameObject;
         if (root == null)
         {
             root = new GameObject("forge_sprites");
-            root.transform.SetParent(prefab.transform, false);
+            root.transform.SetParent(parent, false);
         }
 
         var go = new GameObject("sprite" + root.transform.childCount);

@@ -6,9 +6,10 @@
   <PropertyGroup>
     <ForgeRuntimeDll>$(MSBuildThisFileDirectory)..\Runtime\bin\$(Configuration)\DrakesForgeRuntime.dll</ForgeRuntimeDll>
   </PropertyGroup>
+  <!-- ExcludeFromSingleFile: these must stay real files next to the exe (they're copied into profiles / projects). -->
   <ItemGroup>
-    <None Include="$(ForgeRuntimeDll)" Link="runtime\DrakesForgeRuntime.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(ForgeRuntimeDll)')" />
-    <None Include="..\Runtime\*.cs" Exclude="..\Runtime\ForgeRuntimePlugin.cs" LinkBase="forge-src\Runtime" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\Format\**\*.cs" Exclude="..\Format\obj\**;..\Format\bin\**" LinkBase="forge-src\Format" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(ForgeRuntimeDll)" Link="runtime\DrakesForgeRuntime.dll" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" Condition="Exists('$(ForgeRuntimeDll)')" />
+    <None Include="..\Runtime\*.cs" Exclude="..\Runtime\ForgeRuntimePlugin.cs" LinkBase="forge-src\Runtime" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <None Include="..\Format\**\*.cs" Exclude="..\Format\obj\**;..\Format\bin\**" LinkBase="forge-src\Format" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
 </Project>

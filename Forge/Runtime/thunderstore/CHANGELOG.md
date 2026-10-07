@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (not released yet)
+## 0.2.0
 
 - `look.sprites`: flat images (alpha cut out, one or two sided) placed on the prefab; `look.hideMesh` hides the model's own mesh.
 - `effects`: recolour every light and particle effect (fire, ward glow), scale light brightness and reach.

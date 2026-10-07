@@ -5,7 +5,9 @@ Two things release from this repo, each with its own version and tag:
 - **Drakes Asset Forge** (the desktop app): tags `app-v*`
 - **Drakes Forge Runtime** (the BepInEx mod packs need): tags `runtime-v*`, changelog in [Forge/Runtime/thunderstore/CHANGELOG.md](Forge/Runtime/thunderstore/CHANGELOG.md)
 
-## App 0.2.0 (not released yet)
+## App 0.2.0
+
+Data packs made with 0.2.0 need **Forge Runtime 0.2.0** (their manifest says so).
 
 - Sprites: put flat images (PNG with transparency) on any item or piece: signs, banners, posters, a note lying on the floor. Size, position, rotation, one or both sides, with "Stand up" / "Lie flat" presets and a live preview; optionally hide the base model so the sprite is the whole look.
 - Snap points, redone: auto-detect from the model's shape (floors and walls get their face corners, beams their ends, anything else its 8 corners) plus one-click bottom/top corners, edge middles and centre line; drag numbered points in the viewport, locked to X, Y, Z or level, sticking to the model's edges and middle or a grid; every point is named ("bottom-left corner", "top edge middle") with a front/right/up compass in the viewport; Delete removes the selected point.

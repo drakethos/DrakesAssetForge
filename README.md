@@ -8,6 +8,17 @@ install when the game loads, so a pack is a few small text files plus whatever P
 
 ![Browse Valheim](docs/screenshots/1-browse.png)
 
+## New in 0.2
+
+- **Sprites**: flat pictures on any item or piece (banners, signs, posters, a note on the floor), or as its whole look.
+- **Snap points, redone**: auto-detected from the model's shape; drag numbered points in the viewport with axis locks
+  and edge/grid snapping; every point named by where it sits.
+- **Fire, lights and glow**: recolour flames and lights, glowing materials with a strength above plain white.
+- **Remove and add components**: a ward without warding, a piece with a Rigidbody, any Valheim script with its defaults.
+- **Plain C# export**: your items as readable Jotunn code, no Forge needed.
+
+Full list in [CHANGELOG.md](CHANGELOG.md). Packs using these need **Forge Runtime 0.2.0**.
+
 ## What you can do
 
 - **Browse Valheim**: every item and build piece in your install with a real 3D preview, its materials and shaders,
@@ -48,6 +59,30 @@ install when the game loads, so a pack is a few small text files plus whatever P
 | ![Added Rigidbody](docs/screenshots/7d-ward-components.png) | ![Plain C# export](docs/screenshots/4c-publish-plain.png) |
 | ![Sprite banner](docs/screenshots/8-sprite-banner.png) | ![Publish](docs/screenshots/4-publish.png) |
 | ![Snap tool](docs/screenshots/9-snap-tool.png) | ![Settings](docs/screenshots/6-settings.png) |
+
+## Where it's going
+
+Asset Forge is becoming **the** way to make Valheim content without Unity: start from anything in the game, change
+how it looks and how it works, try it live in a running game, and ship it as a tiny data pack or as your own C# mod.
+No asset bundles, no mocked game scripts, and never a copy of Valheim's files in what you publish. And no lock-in:
+every pack can be exported as code you own.
+
+### Coming next
+
+- **Kitbashing**: build new shapes from pieces of existing ones, without modelling. Scale a swamp key up, put a skull
+  on it, give each part its own materials. Parts are borrowed by name like meshes are today, so packs stay tiny.
+- **Model export**: any Valheim mesh with its textures as `.glb`, to open in Blender (for your own editing; Valheim's
+  files can't be redistributed).
+- **Model import**: your own static `.glb` meshes in packs, loaded by Forge Runtime. No Unity, no asset bundles.
+  Rigged meshes (armour, capes) come after that.
+
+### Later
+
+- Item crafting costs read from vanilla (piece costs already are).
+- Hot reload that also restores removed component settings.
+- Publishing packs to Thunderstore from the app.
+
+Ideas and requests: [issues](https://github.com/drakethos/DrakesAssetForge/issues).
 
 ## Get it
 
@@ -91,8 +126,10 @@ One workflow, two release trains, picked by tag (version must match the project 
 
 | Tag | Builds | Publishes |
 |---|---|---|
-| `app-v0.1.0` | `Forge/App` self-contained win-x64 (with Forge Runtime + source bundled) | GitHub Release |
-| `runtime-v0.1.0` | `Forge/Runtime` Thunderstore package | GitHub Release; Thunderstore and Hexium only when enabled |
+| `app-v0.2.0` | `Forge/App` self-contained win-x64 (with Forge Runtime + source bundled) | GitHub Release (draft) |
+| `runtime-v0.2.0` | `Forge/Runtime` Thunderstore package | GitHub Release (draft); Thunderstore and Hexium only when enabled |
+
+GitHub releases are created as **drafts**: check the notes and files on the Releases page, then press *Publish release*.
 
 Store uploads are off until you turn them on with repository variables `PUBLISH_THUNDERSTORE=true` /
 `PUBLISH_HEXIUM=true` (secrets `THUNDERSTORE_TOKEN`, `HEXIUM_TOKEN`).

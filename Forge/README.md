@@ -24,7 +24,7 @@ dotnet test Forge/Format.Tests
 
 1. **Browse Valheim**: every item and piece in your install, with a real 3D preview (model, materials and shaders, icon), components and build cost. **+** adds to the working list.
 2. **Import**: each listed prefab becomes a **New item** (own ID; pieces copy the vanilla build cost), a **Reskin** (same ID, new look), or a **Source** (kept around to borrow meshes and materials from).
-3. **Workspace**: per item, *Look* (mesh from another prefab, per-material borrow/tint/gloss/metallic/texture, icon from PNG or rendered from the viewport), *Components* (any field, plus Forge behaviours like glow), *Recipe*, *Snap* (base points shown in blue, yours in orange). Edits auto-save; with **Live push** on, every save goes straight to a running game.
+3. **Workspace**: per item, *Look* (mesh from another prefab, per-material borrow/tint/gloss/metallic/texture, icon from PNG or rendered from the viewport), *Components* (any field, plus Forge behaviours like glow), *Recipe*, *Snap* (auto-detect from the shape, drag numbered points in the viewport with axis locks and edge/grid snapping). Edits auto-save; with **Live push** on, every save goes straight to a running game.
 4. **Publish**: checks, what ships, and a Thunderstore-ready zip in `Documents\DrakesAssetForge\Releases`.
 
 Packs live in `Documents\DrakesAssetForge\Packs\<id>` by default (⚙ Settings › Packs folder) (a `.forge/` folder in each holds app-only state and never ships).
@@ -54,7 +54,11 @@ Publish › **C# mod project** writes a BepInEx project with Forge compiled in f
 *Into my existing mod* adds only `Forge\`, hooks, `Customize\`, `Pack\` and a `FORGE.md` with the one `ForgeHost.Start(...)` line to add. `dotnet build` deploys to the profile in `environment.props` (`-p:ForgeDeploy=false` to skip); Release builds also make the Thunderstore zip.
 A mod's embedded Forge claims its pack id, so the shared runtime skips any data-pack copy of the same pack.
 
-Headless: `DrakesAssetForge export-code <pack folder> <output folder>`.
+Publish › **Plain C#** instead writes each item as straight-line Jotunn code (`Items\<Item>.g.cs`, typed field
+assignments, materials, sprites, fire colours, snap points) plus one helper (`Lite\ForgeLite.g.cs`) and the images in
+`Assets\`. No Forge and no pack files; Jotunn is the only dependency. `Customize\<Item>.cs` gets `OnBuilt(GameObject prefab)`.
+
+Headless: `DrakesAssetForge export-code <pack folder> <output folder> [--plain]`.
 
 ## Pack layout
 
@@ -88,10 +92,24 @@ BronzeBuilds/
         "tint": "#C48A48",                      // _Color
         "textures": { "_MainTex": "textures/bronze_patina.png" },
         "floats": { "_Metallic": 0.7 },
-        "colors": { "_EmissionColor": "#FF8800" }
+        "colors": { "_EmissionColor": "#66AAFF*2.5" }   // "*k" = strength (HDR glow); setting emission turns it on
       }
     ],
+    "sprites": [                                // flat images: pivot bottom centre, facing +Z (forward), alpha cut out
+      { "file": "textures/banner.png", "size": [0.6, 1.2], "position": [0, 0.5, 0.12], "rotation": [0, 0, 0], "doubleSided": true }
+    ],
+    "hideMesh": false,                          // true: only the sprites show (colliders stay)
     "icon": "textures/gate_icon.png"
+  },
+
+  "effects": {                                  // every Light and particle effect (fire, sparks, ward glow)
+    "lightColor": "#66AAFF", "lightIntensity": 1.5, "lightRange": 1.0,   // intensity/range multiply vanilla
+    "flameTint": "#4C8CFF"                      // keeps each effect's fade
+  },
+
+  "components": {                               // structural; needs a game restart to change
+    "remove": ["PrivateArea"],                  // a ward without warding
+    "add": [ { "type": "Rigidbody" } ]          // Unity components or any Valheim script; set them up under "fields"
   },
 
   "fields": {                                   // any component field, dotted paths for nested data
@@ -122,5 +140,4 @@ Borrowing (`from`, `mesh.prefab`) always takes the **vanilla** look, even if ano
 - `look.mesh.file` (.glb models): next runtime milestone (runtime glTF loader).
 - Restoring component fields on hot reload: a removed field keeps its last value until restart.
 - Item crafting recipes aren't read from vanilla yet (piece costs are); set item costs in the Recipe tab.
-- Click-to-place snap points in the viewport (numeric entry works today).
 - UI design canvas: https://claude.ai/artifact/W3avdoNYCwB8nNKHM9oLMs

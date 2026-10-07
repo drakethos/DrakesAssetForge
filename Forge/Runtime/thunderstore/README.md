@@ -13,6 +13,9 @@ Install this and the pack you want. That's it. Packs installed under `BepInEx/pl
 ## For pack makers
 
 - Made with the Drakes Asset Forge desktop app (browse Valheim, import, edit, publish).
+- What a pack can do: borrow any vanilla mesh or material, tint and retexture (armour body textures too), recolour
+  fire, lights and glow, add flat sprites (banners, signs, notes), change any component setting, remove or add
+  components, set costs, crafting stations, hammer tabs and snap points.
 - Packs in the app's push folder hot-reload while the game runs: look, settings, snap points and costs update live.
 - A pack exported as a **C# mod** compiles Forge into the mod itself and doesn't need this runtime.
 

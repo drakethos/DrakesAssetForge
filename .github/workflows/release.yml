@@ -4,6 +4,7 @@ name: Release
 #   app-v1.2.3      → Drakes Asset Forge (desktop app), self-contained win-x64 zip → GitHub Release
 #   runtime-v1.2.3  → Drakes Forge Runtime (BepInEx mod) Thunderstore zip → GitHub Release,
 #                     then Thunderstore / Hexium only when the repo variables PUBLISH_THUNDERSTORE / PUBLISH_HEXIUM are 'true'.
+# GitHub releases are created as drafts: review them on the Releases page, then press "Publish release".
 # The tag's version must equal <Version> in the project file.
 
 on:
@@ -81,6 +82,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: "Drakes Asset Forge ${{ steps.ver.outputs.version }}"
+          draft: true
           make_latest: "true"
           files: ${{ steps.zip.outputs.zip }}
           body: |
@@ -154,6 +156,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: "Drakes Forge Runtime ${{ steps.ver.outputs.version }}"
+          draft: true
           make_latest: "false"
           files: ${{ steps.pkg.outputs.zip }}
           body: |

@@ -20,6 +20,9 @@ install when the game loads, so a pack is a few small text files plus whatever P
 - **Change anything**: every setting on the base's scripts (ItemDrop, Piece, WearNTear, Door, Container…) with its
   vanilla value, proper controls (dropdowns for enums, toggles, colours), search, and one-click reset. Costs, crafting
   station, hammer tab, snap points, and a glow light.
+- **Sprites**: put flat pictures (PNG with transparency) on any item or piece: a banner on a pole, a sign, a poster,
+  a note lying on the floor. Size, position, rotation, one or both sides; or hide the base model so the picture is
+  the whole look. No 3D modelling needed.
 - **Fire, light and glow colours**: recolour a brazier's flames and light, make a ward burn blue, and change
   what a material glows (emission colour plus strength, so runes can glow brighter than plain white).
 - **Remove and add components**: a ward clone without warding (remove `PrivateArea`, after an "are you sure?"
@@ -41,7 +44,8 @@ install when the game loads, so a pack is a few small text files plus whatever P
 | ![Material picker](docs/screenshots/3f-material-picker.png) | ![Armour body textures](docs/screenshots/5b-dress-body.png) |
 | ![Fire and glow colours](docs/screenshots/7-ward-fire.png) | ![Remove a component](docs/screenshots/7b-ward-remove-confirm.png) |
 | ![Added Rigidbody](docs/screenshots/7d-ward-components.png) | ![Plain C# export](docs/screenshots/4c-publish-plain.png) |
-| ![Publish](docs/screenshots/4-publish.png) | ![Settings](docs/screenshots/6-settings.png) |
+| ![Sprite banner](docs/screenshots/8-sprite-banner.png) | ![Publish](docs/screenshots/4-publish.png) |
+| ![Settings](docs/screenshots/6-settings.png) | |
 
 ## Get it
 

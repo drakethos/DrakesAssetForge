@@ -26,6 +26,7 @@ internal static class InstanceSync
             CopyEffects(prefab, instance);
             ReplaceChild(prefab, instance, GameNames.VisualChild);
             ReplaceChild(prefab, instance, GameNames.GlowChild);
+            ReplaceChild(prefab, instance, GameNames.SpritesChild);
 
             foreach (var renderer in LookApplier.VisualRenderers(instance))
             {

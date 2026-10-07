@@ -267,6 +267,10 @@ public static class RecipeSerializer
                     problems.Add($"look.materials[{i}].colors.{c.Key} \"{c.Value}\" is not a color.");
         }
 
+        foreach (var s in recipe.Look.Sprites)
+            if (s.Width <= 0 || s.Height <= 0)
+                problems.Add($"look.sprites \"{s.File}\": size must be above 0.");
+
         if (recipe.Craft != null)
         {
             foreach (var r in recipe.Craft.Requirements)
@@ -291,7 +295,6 @@ public static class RecipeSerializer
             problems.Add("Snap points only apply to pieces.");
     }
 
-    /// <summary>Parses #RGB, #RRGGBB or #RRGGBBAA into 0–1 floats.</summary>
     /// <summary>
     /// "#RRGGBB" / "#RRGGBBAA" / "#RGB", optionally "*k" for HDR brightness (emission, glow):
     /// "#66CCFF*2.5" scales RGB by 2.5 (alpha untouched).
@@ -389,7 +392,55 @@ public static class RecipeSerializer
             }
         }
 
+        result.HideMesh = look["hideMesh"]?.AsBool() ?? false;
+        if (look["sprites"] is { IsArray: true } sprites)
+        {
+            foreach (var s in sprites.Items)
+            {
+                if (!s.IsObject || Str(s, "file") is not { } file)
+                {
+                    problems.Add("look.sprites entries need \"file\".");
+                    continue;
+                }
+
+                var size = ReadVector(s["size"], 2, "look.sprites.size", problems);
+                var position = ReadVector(s["position"], 3, "look.sprites.position", problems);
+                var rotation = ReadVector(s["rotation"], 3, "look.sprites.rotation", problems);
+                result.Sprites.Add(new SpriteRecipe
+                {
+                    File = file,
+                    Width = size?[0] ?? 1f,
+                    Height = size?[1] ?? 1f,
+                    Position = position == null ? default : new Vec3(position[0], position[1], position[2]),
+                    Rotation = rotation == null ? default : new Vec3(rotation[0], rotation[1], rotation[2]),
+                    DoubleSided = s["doubleSided"]?.AsBool() ?? true
+                });
+            }
+        }
+
         return result;
+    }
+
+    /// <summary>[x, y(, z)] → floats, or null (with a problem when present but malformed).</summary>
+    private static float[]? ReadVector(JsonValue? value, int length, string what, List<string> problems)
+    {
+        if (value == null)
+            return null;
+        if (!value.IsArray || value.Count != length || value.Items.Any(i => i.AsNumber() == null))
+        {
+            problems.Add($"{what} must be [{(length == 2 ? "width, height" : "x, y, z")}].");
+            return null;
+        }
+
+        return value.Items.Select(i => (float)i.NumberValue).ToArray();
+    }
+
+    private static JsonValue Vector(params float[] values)
+    {
+        var arr = JsonValue.NewArray();
+        foreach (var v in values)
+            arr.Add(Tidy(v));
+        return arr;
     }
 
     private static JsonValue WriteLook(LookRecipe look)
@@ -454,6 +505,26 @@ public static class RecipeSerializer
             }
 
             obj.Set("materials", arr);
+        }
+
+        if (look.HideMesh)
+            obj.Set("hideMesh", true);
+        if (look.Sprites.Count > 0)
+        {
+            var arr = JsonValue.NewArray();
+            foreach (var s in look.Sprites)
+            {
+                var o = JsonValue.NewObject().Set("file", s.File).Set("size", Vector(s.Width, s.Height));
+                if (s.Position.X != 0 || s.Position.Y != 0 || s.Position.Z != 0)
+                    o.Set("position", Vector(s.Position.X, s.Position.Y, s.Position.Z));
+                if (s.Rotation.X != 0 || s.Rotation.Y != 0 || s.Rotation.Z != 0)
+                    o.Set("rotation", Vector(s.Rotation.X, s.Rotation.Y, s.Rotation.Z));
+                if (!s.DoubleSided)
+                    o.Set("doubleSided", false);
+                arr.Add(o);
+            }
+
+            obj.Set("sprites", arr);
         }
 
         SetIf(obj, "icon", look.Icon);

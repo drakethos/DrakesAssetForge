@@ -87,6 +87,11 @@ public sealed partial class ItemEditorViewModel : ObservableObject
 
         Components = new ComponentsPanel(ScheduleSave);
 
+        _hideMesh = recipe.Look.HideMesh;
+        Sprites.CollectionChanged += OnRowsChanged;
+        foreach (var s in recipe.Look.Sprites)
+            AddSpriteRow(SpriteRow.From(s, Images.LoadFile(main.Pack?.FullPath(s.File))));
+
         _snapMode = (recipe.Snap?.Mode ?? Format.SnapMode.Keep).ToString().ToLowerInvariant();
         foreach (var p in recipe.Snap?.Points ?? new List<Vec3>())
             AddSnapRow(p.X, p.Y, p.Z);
@@ -139,6 +144,53 @@ public sealed partial class ItemEditorViewModel : ObservableObject
     [ObservableProperty] private string _iconFile;
     [ObservableProperty] private Bitmap? _iconImage;
     [ObservableProperty] private string _scripts = "";
+
+    // Sprites: flat images on the model
+    public ObservableCollection<SpriteRow> Sprites { get; } = new();
+    [ObservableProperty] private bool _hideMesh;
+    public bool HasSprites => Sprites.Count > 0;
+
+    partial void OnHideMeshChanged(bool value)
+    {
+        Refresh();
+        ScheduleSave();
+    }
+
+    [RelayCommand]
+    private async Task AddSprite()
+    {
+        var file = await Dialogs.PickFileAsync("Choose an image (PNG with transparency)", "Images", "*.png");
+        if (file == null || Pack == null)
+            return;
+        var relative = Pack.AddFile(file, "textures");
+        var image = Images.LoadFile(Pack.FullPath(relative));
+        if (image == null)
+        {
+            Status($"Couldn't read {Path.GetFileName(file)} as an image.");
+            return;
+        }
+
+        AddSprite(relative, image);
+    }
+
+    /// <summary>A new sprite, 1 m on its longer side, standing on the origin.</summary>
+    public SpriteRow AddSprite(string relative, RgbaImage image)
+    {
+        var row = new SpriteRow(relative, image);
+        if (row.Aspect >= 1)
+            row.Width = 1;
+        else
+            row.Height = 1;
+        AddSpriteRow(row);
+        return row;
+    }
+
+    private void AddSpriteRow(SpriteRow row)
+    {
+        row.RemoveCommand = new RelayCommand(() => Sprites.Remove(row));
+        Sprites.Add(row);
+        OnPropertyChanged(nameof(HasSprites));
+    }
 
     // Fire & lights (every Light and particle effect on the base)
     [ObservableProperty] private bool _hasEffects;
@@ -335,7 +387,17 @@ public sealed partial class ItemEditorViewModel : ObservableObject
             return;
         }
 
-        var parts = ShowWorn && model.WornParts.Count > 0 ? model.WornParts : model.Parts;
+        var worn = ShowWorn && model.WornParts.Count > 0;
+        var parts = (worn ? model.WornParts : model.Parts).ToList();
+        // Sprites sit on the dropped/placed model, as in game.
+        if (!worn && !CompareToBase)
+        {
+            if (HideMesh)
+                parts.Clear();
+            parts.AddRange(Sprites.Where(s => !s.IsMissing).Select((s, i) => s.ToPart(SpriteRow.SlotBase + i)));
+        }
+
+        var sprites = Sprites.Where(s => !s.IsMissing).ToList();
         ViewportMessage = parts.Count == 0
             ? "This prefab has no visible mesh."
             : SelectedMaterial is { IsArmor: true }
@@ -348,6 +410,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject
         var compare = CompareToBase;
         Look = slot =>
         {
+            if (slot >= SpriteRow.SlotBase)
+                return new SlotLook(sprites[slot - SpriteRow.SlotBase].Image, Vector4.One);
             var look = SoftwareRenderer.DefaultLook(model, slot);
             if (compare || slot >= model.Materials.Count)
                 return look;
@@ -446,8 +510,10 @@ public sealed partial class ItemEditorViewModel : ObservableObject
 
     private void RowEdited(object? collection)
     {
-        if (collection == SnapPoints)
+        if (collection == SnapPoints || collection == Sprites)
             Refresh();
+        if (collection == Sprites)
+            OnPropertyChanged(nameof(HasSprites));
         ScheduleSave();
     }
 
@@ -472,6 +538,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject
         Recipe.Look.Mesh = MeshFrom.Length > 0 ? new MeshSource { Prefab = MeshFrom } : null;
         Recipe.Look.Icon = IconFile.Length > 0 ? IconFile : null;
         Recipe.Look.Materials = Materials.Select(m => m.ToOverride()).Where(o => o != null).Select(o => o!).ToList();
+        Recipe.Look.Sprites = Sprites.Select(s => s.ToRecipe()).ToList();
+        Recipe.Look.HideMesh = HideMesh;
 
         Recipe.Fields = Components.Collect();
         Recipe.RemoveComponents = Components.RemovedNames.ToList();
@@ -556,7 +624,7 @@ public sealed partial class ItemEditorViewModel : ObservableObject
         var model = ShownModel;
         if (model == null || Pack == null || Look == null)
             return;
-        var image = SoftwareRenderer.Render(model.Parts, Look, camera ?? new OrbitCamera(), 128, 128, background: 0x00000000);
+        var image = SoftwareRenderer.Render(Parts ?? model.Parts, Look, camera ?? new OrbitCamera(), 128, 128, background: 0x00000000);
         var relative = $"textures/{Recipe.Id}_icon.png";
         Images.SavePng(image, Pack.FullPath(relative)!);
         IconFile = relative;

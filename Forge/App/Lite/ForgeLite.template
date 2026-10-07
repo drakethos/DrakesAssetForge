@@ -213,6 +213,92 @@ internal static class ForgeLite
         }
     }
 
+    /// <summary>Stops the model's own meshes drawing (colliders stay), e.g. when sprites replace it.</summary>
+    internal static void HideMesh(GameObject prefab)
+    {
+        foreach (var renderer in Renderers(prefab))
+            renderer.enabled = false;
+    }
+
+    private static Material? _spriteTemplate;
+
+    /// <summary>
+    /// A flat image: pivot at its bottom centre, facing -Z before rotation, alpha cut out. Two-sided adds a mirrored
+    /// back face so text reads correctly from behind.
+    /// </summary>
+    internal static void AddSprite(GameObject prefab, string file, float width, float height, Vector3 position, Vector3 rotation, bool doubleSided)
+    {
+        if (Texture(file) is not { } texture)
+            return;
+        texture.wrapMode = TextureWrapMode.Clamp;
+        var root = prefab.transform.Find("forge_sprites")?.gameObject;
+        if (root == null)
+        {
+            root = new GameObject("forge_sprites");
+            root.transform.SetParent(prefab.transform, false);
+        }
+
+        var go = new GameObject("sprite" + root.transform.childCount);
+        go.transform.SetParent(root.transform, false);
+        go.transform.localPosition = position;
+        go.transform.localRotation = Quaternion.Euler(rotation);
+
+        var w = width / 2f;
+        var vertices = new List<Vector3> { new(-w, 0, 0), new(-w, height, 0), new(w, height, 0), new(w, 0, 0) };
+        var normals = Enumerable.Repeat(Vector3.back, 4).ToList();
+        var uvs = new List<Vector2> { new(0, 0), new(0, 1), new(1, 1), new(1, 0) };
+        var triangles = new List<int> { 0, 1, 2, 0, 2, 3 };
+        if (doubleSided)
+        {
+            vertices.AddRange(vertices.ToList());
+            normals.AddRange(Enumerable.Repeat(Vector3.forward, 4));
+            uvs.AddRange(new Vector2[] { new(1, 0), new(1, 1), new(0, 1), new(0, 0) });
+            triangles.AddRange(new[] { 4, 6, 5, 4, 7, 6 });
+        }
+
+        var mesh = new Mesh { name = "forge_sprite" };
+        mesh.SetVertices(vertices);
+        mesh.SetNormals(normals);
+        mesh.SetUVs(0, uvs);
+        mesh.SetTriangles(triangles, 0);
+        mesh.RecalculateBounds();
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+
+        // A vanilla Standard cutout material as the base, so the shader variant is certainly in the game build.
+        if (_spriteTemplate == null)
+        {
+            _spriteTemplate = Resources.FindObjectsOfTypeAll<Material>()
+                .FirstOrDefault(m => m != null && m.shader != null && m.shader.name == "Standard" && m.IsKeywordEnabled("_ALPHATEST_ON"));
+            if (_spriteTemplate == null)
+            {
+                _spriteTemplate = new Material(Shader.Find("Standard"));
+                _spriteTemplate.SetFloat("_Mode", 1f);
+                _spriteTemplate.EnableKeyword("_ALPHATEST_ON");
+                _spriteTemplate.SetOverrideTag("RenderType", "TransparentCutout");
+                _spriteTemplate.renderQueue = (int)UnityEngine.Rendering.RenderQueue.AlphaTest;
+            }
+        }
+
+        var material = new Material(_spriteTemplate) { name = "forge_sprite_" + texture.name };
+        material.SetTexture("_MainTex", texture);
+        material.SetColor("_Color", Color.white);
+        foreach (var slot in new[] { "_BumpMap", "_MetallicGlossMap", "_EmissionMap", "_OcclusionMap", "_DetailAlbedoMap" })
+            if (material.HasProperty(slot))
+                material.SetTexture(slot, null);
+        material.DisableKeyword("_NORMALMAP");
+        material.DisableKeyword("_EMISSION");
+        material.DisableKeyword("_METALLICGLOSSMAP");
+        if (material.HasProperty("_Glossiness"))
+            material.SetFloat("_Glossiness", 0.15f);
+        if (material.HasProperty("_Metallic"))
+            material.SetFloat("_Metallic", 0f);
+        if (material.HasProperty("_Cutoff"))
+            material.SetFloat("_Cutoff", 0.5f);
+        var renderer = go.AddComponent<MeshRenderer>();
+        renderer.sharedMaterial = material;
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.TwoSided;
+    }
+
     /// <summary>Valheim snap points: direct children tagged "snappoint".</summary>
     internal static void SnapPoints(GameObject piece, bool replace, params Vector3[] points)
     {

@@ -69,6 +69,7 @@ internal sealed class LookBaseline
     {
         DestroyChild(prefab, GameNames.VisualChild);
         DestroyChild(prefab, GameNames.GlowChild);
+        DestroyChild(prefab, GameNames.SpritesChild);
         Effects.Restore(_effects);
 
         foreach (var (renderer, materials, enabled) in _renderers)

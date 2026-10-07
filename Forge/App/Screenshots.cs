@@ -210,6 +210,25 @@ internal static class Screenshots
                 wardEditor.SaveNow();
             }
 
+            // Sprites: a swallowtail banner (drawn here, alpha cut out) hung on the iron-wood pole.
+            var bannerFile = "textures/screens_banner.png";
+            var banner = Banner(96, 192);
+            Images.SavePng(banner, vm.Pack!.FullPath(bannerFile)!);
+            var bannerPole = new Format.ItemRecipe { Id = "screens_banner_pole", Base = "woodiron_pole", Kind = Format.RecipeKind.Piece, Name = "Banner Pole" };
+            vm.Pack!.SaveRecipe(bannerPole);
+            vm.Workspace.Reload(bannerPole);
+            await Settle(window, 4000);
+            if (vm.Workspace.Editor is { } poleEditor)
+            {
+                var row = poleEditor.AddSprite(bannerFile, banner);
+                row.Height = 1.2;
+                row.Y = 0.5;
+                row.Z = -0.12;
+                await Settle(window, 1200);
+                Save(window, outDir, "8-sprite-banner");
+                poleEditor.SaveNow();
+            }
+
             vm.GoTo(Step.Publish);
             await Settle(window, 600);
             vm.Publish.MakeIconCommand.Execute(null);
@@ -240,6 +259,31 @@ internal static class Screenshots
             vm.Dispose();
             return 0;
         }, CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    /// <summary>Red banner with a swallowtail cut (transparent) and a gold disc, BGRA.</summary>
+    private static Valheim.RgbaImage Banner(int w, int h)
+    {
+        var px = new byte[w * h * 4];
+        for (var y = 0; y < h; y++)
+        for (var x = 0; x < w; x++)
+        {
+            var o = (y * w + x) * 4;
+            // Image rows run top to bottom: the V notch is at the bottom.
+            var notch = y > h * 0.8 && Math.Abs(x - w / 2.0) < (y - h * 0.8) * (w / 2.0) / (h * 0.2);
+            if (notch)
+                continue; // alpha 0: cut out
+            var dx = x - w / 2.0;
+            var dy = y - h * 0.38;
+            var gold = dx * dx + dy * dy < (w * 0.28) * (w * 0.28);
+            var border = x < 5 || x >= w - 5 || y < 5;
+            px[o] = (byte)(gold ? 40 : border ? 30 : 36);
+            px[o + 1] = (byte)(gold ? 180 : border ? 140 : 32);
+            px[o + 2] = (byte)(gold ? 230 : border ? 200 : 160);
+            px[o + 3] = 255;
+        }
+
+        return new Valheim.RgbaImage { Width = w, Height = h, Bgra = px };
     }
 
     /// <summary>Lets background loads finish and the UI catch up.</summary>

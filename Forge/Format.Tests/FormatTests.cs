@@ -123,6 +123,29 @@ public class RecipeTests
     }
 
     [Fact]
+    public void Sprites_round_trip()
+    {
+        var problems = new List<string>();
+        var r = RecipeSerializer.ReadRecipe("""
+            { "id": "paper", "base": "Wood", "look": { "hideMesh": true, "sprites": [
+              { "file": "textures/note.png", "size": [0.4, 0.6], "position": [0, 0.05, 0], "rotation": [90, 0, 0], "doubleSided": false },
+              { "file": "textures/b.png", "size": [1, 2] } ] } }
+            """, problems);
+
+        Assert.Empty(problems);
+        Assert.True(r.Look.HideMesh);
+        Assert.Equal(2, r.Look.Sprites.Count);
+        Assert.Equal(0.6f, r.Look.Sprites[0].Height);
+        Assert.Equal(90f, r.Look.Sprites[0].Rotation.X);
+        Assert.False(r.Look.Sprites[0].DoubleSided);
+        Assert.True(r.Look.Sprites[1].DoubleSided);
+
+        var text = RecipeSerializer.WriteRecipe(r);
+        Assert.Equal(text, RecipeSerializer.WriteRecipe(RecipeSerializer.ReadRecipe(text, problems)));
+        Assert.Empty(problems);
+    }
+
+    [Fact]
     public void Resolve_refuses_paths_outside_the_pack()
     {
         var pack = new LoadedPack(Path.GetTempPath(), new ForgePack());

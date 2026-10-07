@@ -26,6 +26,8 @@ internal static class LookApplier
             ApplyArmorMaterial(prefab, body, pack, textures, warnings);
         if (look.Icon != null)
             ApplyIcon(prefab, look.Icon, pack, textures, warnings);
+        // Last, so material overrides and slot numbers only ever see the model's own renderers.
+        Sprites.Apply(prefab, look, pack, textures, warnings);
     }
 
     private static void ApplyMesh(GameObject prefab, MeshSource mesh, List<string> warnings)

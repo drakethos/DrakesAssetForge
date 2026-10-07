@@ -248,6 +248,12 @@ public static class LiteCodeWriter
                 MaterialCall(ov, L);
             if (look.Icon != null)
                 L($"ForgeLite.Icon(prefab, {Str(look.Icon)});");
+            // After materials, as in Forge: overrides never touch the sprites.
+            if (look.HideMesh)
+                L("ForgeLite.HideMesh(prefab);");
+            foreach (var s in look.Sprites)
+                L($"ForgeLite.AddSprite(prefab, {Str(s.File)}, {F(s.Width)}, {F(s.Height)}, new Vector3({F(s.Position.X)}, {F(s.Position.Y)}, {F(s.Position.Z)}), " +
+                  $"new Vector3({F(s.Rotation.X)}, {F(s.Rotation.Y)}, {F(s.Rotation.Z)}), {Bool(s.DoubleSided)});");
         }
 
         if (recipe.Name != null || recipe.Description != null)

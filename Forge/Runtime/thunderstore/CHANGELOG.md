@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 (not released yet)
 
+- `look.sprites`: flat images (alpha cut out, one or two sided) placed on the prefab; `look.hideMesh` hides the model's own mesh.
 - `effects`: recolour every light and particle effect (fire, ward glow), scale light brightness and reach.
 - `components`: `remove` scripts (a ward without warding) and `add` Unity components or Valheim scripts.
 - Colours accept a strength, `#RRGGBB*k`, for HDR emission; setting `_EmissionColor` turns emission on.

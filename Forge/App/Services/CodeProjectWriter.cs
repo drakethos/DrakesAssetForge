@@ -384,7 +384,8 @@ public static class CodeProjectWriter
 /// <summary>Thunderstore metadata kept in the pack folder (README.md, CHANGELOG.md, icon.png) and the generated manifest.</summary>
 public static class ThunderstoreFiles
 {
-    public const string ForgeRuntimeDependency = "DrakeMods-DrakesForgeRuntime-0.1.0";
+    // Packs can use sprites, effects and component changes, which need Forge Runtime 0.2.
+    public const string ForgeRuntimeDependency = "DrakeMods-DrakesForgeRuntime-0.2.0";
     public const string JotunnDependency = "ValheimModding-Jotunn-2.30.2";
     public static readonly string[] DataPackDependencies = { ForgeRuntimeDependency, JotunnDependency };
     public static readonly string[] CodeModDependencies = { JotunnDependency };

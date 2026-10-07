@@ -71,8 +71,30 @@ public sealed class LookRecipe
     public List<MaterialOverride> Materials { get; set; } = new();
     /// <summary>Pack-relative PNG. Null keeps the base icon.</summary>
     public string? Icon { get; set; }
+    /// <summary>Flat images added to the model (signs, banners, decals, or a whole "paper" item).</summary>
+    public List<SpriteRecipe> Sprites { get; set; } = new();
+    /// <summary>Hide the base's own mesh, e.g. when sprites replace it. Colliders stay.</summary>
+    public bool HideMesh { get; set; }
 
-    public bool IsEmpty => Mesh == null && Materials.Count == 0 && Icon == null;
+    public bool IsEmpty => Mesh == null && Materials.Count == 0 && Icon == null && Sprites.Count == 0 && !HideMesh;
+}
+
+/// <summary>
+/// A flat image: a quad of <see cref="Width"/> × <see cref="Height"/> metres, pivot at its bottom centre, facing -Z
+/// before <see cref="Rotation"/>. Transparent pixels (alpha below half) are cut out.
+/// </summary>
+public sealed class SpriteRecipe
+{
+    /// <summary>Pack-relative PNG.</summary>
+    public string File { get; set; } = "";
+    public float Width { get; set; } = 1f;
+    public float Height { get; set; } = 1f;
+    /// <summary>Local to the prefab root, in metres.</summary>
+    public Vec3 Position { get; set; }
+    /// <summary>Euler angles in degrees, Unity order (Z, then X, then Y).</summary>
+    public Vec3 Rotation { get; set; }
+    /// <summary>Visible from both sides; the back shows the image mirrored back, so text reads correctly.</summary>
+    public bool DoubleSided { get; set; } = true;
 }
 
 /// <summary>Replace the base's visible mesh with another vanilla prefab's or a pack model file.</summary>

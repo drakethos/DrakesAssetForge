@@ -6,7 +6,7 @@
     <RootNamespace>DrakesForge.App</RootNamespace>
     <AssemblyName>DrakesAssetForge</AssemblyName>
     <!-- Release tag app-v{Version} must match (checked by .github/workflows/release.yml). -->
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Product>Drakes Asset Forge</Product>
     <Authors>DrakeMods</Authors>
     <ApplicationIcon>Assets\assetforge.ico</ApplicationIcon>

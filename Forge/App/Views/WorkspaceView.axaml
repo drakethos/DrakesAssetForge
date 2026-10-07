@@ -259,6 +259,58 @@
                                     <TextBlock Classes="muted" Text="Keep the base's shape, or show another Valheim prefab's mesh instead." />
                                 </StackPanel>
                             </Border>
+                            <Border Classes="section">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="SPRITES" Classes="h" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="small" Content="+ Add image…" Command="{Binding AddSpriteCommand}" />
+                                    </Grid>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !HasSprites}"
+                                               Text="Flat pictures on the model: signs, banners, posters, a note on the floor. Transparent parts of the PNG are cut out." />
+                                    <ItemsControl ItemsSource="{Binding Sprites}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:SpriteRow">
+                                                <Border Classes="card" Padding="10" Margin="0,0,0,6">
+                                                    <StackPanel Spacing="8">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                            <Border Width="44" Height="44" Background="{StaticResource ViewportBrush}" CornerRadius="4">
+                                                                <Image Source="{Binding Thumbnail}" Stretch="Uniform" Margin="2" />
+                                                            </Border>
+                                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Text="Image file is missing from the pack" Foreground="{StaticResource WarnBrush}" IsVisible="{Binding IsMissing}" />
+                                                                <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,4,0,0">
+                                                                    <Button Classes="small ghost" Content="Stand up" Command="{Binding StandUpCommand}" ToolTip.Tip="Upright, standing on the origin" />
+                                                                    <Button Classes="small ghost" Content="Lie flat" Command="{Binding LieFlatCommand}" ToolTip.Tip="Face up on the ground, centred" />
+                                                                </StackPanel>
+                                                            </StackPanel>
+                                                            <Button Grid.Column="2" Classes="small ghost" Content="×" Command="{Binding RemoveCommand}" VerticalAlignment="Top" ToolTip.Tip="Remove this sprite" />
+                                                        </Grid>
+                                                        <Grid ColumnDefinitions="70,*,*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="6" RowSpacing="6">
+                                                            <TextBlock Text="Size (m)" Classes="muted" VerticalAlignment="Center" />
+                                                            <TextBox Grid.Column="1" Text="{Binding Width}" ToolTip.Tip="Width" />
+                                                            <TextBox Grid.Column="2" Text="{Binding Height}" ToolTip.Tip="Height" />
+                                                            <CheckBox Grid.Column="3" Content="Keep shape" IsChecked="{Binding KeepAspect}" ToolTip.Tip="Keep the image's proportions" />
+                                                            <TextBlock Grid.Row="1" Text="Position" Classes="muted" VerticalAlignment="Center" />
+                                                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding X}" ToolTip.Tip="X (m)" />
+                                                            <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Y}" ToolTip.Tip="Y (m, up)" />
+                                                            <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding Z}" ToolTip.Tip="Z (m)" />
+                                                            <TextBlock Grid.Row="2" Text="Rotation °" Classes="muted" VerticalAlignment="Center" />
+                                                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding RotX}" ToolTip.Tip="Tilt (X)" />
+                                                            <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding RotY}" ToolTip.Tip="Turn (Y)" />
+                                                            <TextBox Grid.Row="2" Grid.Column="3" Text="{Binding RotZ}" ToolTip.Tip="Roll (Z)" />
+                                                            <CheckBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" Content="Both sides" IsChecked="{Binding DoubleSided}"
+                                                                      ToolTip.Tip="Visible from behind too (mirrored back so text reads the right way)" />
+                                                        </Grid>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <CheckBox Content="Hide the base model (sprites only)" IsChecked="{Binding HideMesh}"
+                                              ToolTip.Tip="The base's mesh stops drawing; its collision and hitbox stay." />
+                                </StackPanel>
+                            </Border>
                             <Border Classes="section" IsVisible="{Binding HasEffects}">
                                 <StackPanel Spacing="8">
                                     <Grid ColumnDefinitions="*,Auto">

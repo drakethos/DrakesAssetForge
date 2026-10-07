@@ -9,6 +9,7 @@ internal static class GameNames
     /// <summary>Child objects Forge adds to a prefab. Restore and instance sync find them by these names.</summary>
     public const string VisualChild = "forge_visual";
     public const string GlowChild = "forge_glow";
+    public const string SpritesChild = "forge_sprites";
 
     public static string? Station(string? name)
     {

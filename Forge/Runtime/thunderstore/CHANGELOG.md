@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `look.parts` (kitbashing): other vanilla prefabs' meshes placed on the model, each with position, rotation, scale, an optional mesh-name filter and its own material overrides. On items they sit under `attach`, so they show held and dropped.
+- `look.scale`: scales the whole model (items: the held/dropped visual; pieces: the root, collision included).
+- Fix: `hideMesh` now hides only the model's own meshes, never parts or sprites.
+
 ## 0.2.1
 
 - Packaging release: version aligned with Drakes Asset Forge 0.2.1. No functional changes since 0.2.0.

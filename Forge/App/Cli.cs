@@ -142,6 +142,9 @@ internal static class Cli
             var files = new List<string?> { r.Look.Icon };
             files.AddRange(r.Look.Materials.SelectMany(m => m.Textures.Values));
             files.AddRange(r.Look.Sprites.Select(s => s.File));
+            files.AddRange(r.Look.Parts.SelectMany(p => p.Materials).SelectMany(m => m.Textures.Values));
+            foreach (var part in r.Look.Parts.Where(p => !vanilla.Catalog.ByName.ContainsKey(p.Prefab)))
+                problems.Add($"{r.Id}: part prefab '{part.Prefab}' isn't in this Valheim install.");
             foreach (var f in files.Where(f => !string.IsNullOrEmpty(f)).Distinct())
                 if (pack.Resolve(f!) is not { } full || !File.Exists(full))
                     problems.Add($"{r.Id}: file '{f}' is missing from the pack.");
@@ -175,6 +178,21 @@ internal static class Cli
         {
             if (!recipe.Look.HideMesh)
                 parts.AddRange(model.Parts);
+            // Kitbash parts (vanilla looks; per-part material overrides aren't drawn here).
+            var partModels = new List<VanillaModel?>();
+            for (var i = 0; i < recipe.Look.Parts.Count; i++)
+            {
+                var pr = recipe.Look.Parts[i];
+                var partModel = vanilla.TryLoadPreviewAsync(pr.Prefab)?.GetAwaiter().GetResult()?.Model;
+                partModels.Add(partModel);
+                var row = ViewModels.PartRow.From(pr);
+                row.Model = partModel;
+                parts.AddRange(row.ViewParts(i));
+            }
+
+            var scale = new Vector3(recipe.Look.Scale.X, recipe.Look.Scale.Y, recipe.Look.Scale.Z);
+            if (scale != Vector3.One)
+                parts = parts.Select(p => ViewModels.PartRow.Transform(p, Matrix4x4.CreateScale(scale), Matrix4x4.Identity, p.MaterialSlot)).ToList();
             var images = new List<RgbaImage?>();
             foreach (var s in recipe.Look.Sprites)
             {
@@ -186,7 +204,11 @@ internal static class Cli
             if (parts.Count == 0)
                 throw new InvalidOperationException("Nothing to draw (mesh hidden and no sprites).");
             var camera = new OrbitCamera { Yaw = (float)(yaw * Math.PI / 180), Pitch = (float)(pitch * Math.PI / 180) };
-            var image = SoftwareRenderer.Render(parts, slot => slot >= ViewModels.SpriteRow.SlotBase
+            var image = SoftwareRenderer.Render(parts, slot => slot >= ViewModels.PartRow.SlotBase
+                ? partModels.ElementAtOrDefault((slot - ViewModels.PartRow.SlotBase) / ViewModels.PartRow.SlotStride) is { } pm
+                    ? SoftwareRenderer.DefaultLook(pm, (slot - ViewModels.PartRow.SlotBase) % ViewModels.PartRow.SlotStride)
+                    : new SlotLook(null, new Vector4(0.8f, 0.8f, 0.8f, 1f))
+                : slot >= ViewModels.SpriteRow.SlotBase
                 ? new SlotLook(images[slot - ViewModels.SpriteRow.SlotBase], Vector4.One)
                 : SoftwareRenderer.DefaultLook(model, slot), camera, size, size);
             Images.SavePng(image, Path.GetFullPath(output));

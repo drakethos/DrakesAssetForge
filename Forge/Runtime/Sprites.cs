@@ -15,9 +15,6 @@ internal static class Sprites
 
     public static void Apply(GameObject prefab, LookRecipe look, LoadedPack pack, TextureCache textures, List<string> warnings)
     {
-        if (look.HideMesh)
-            foreach (var renderer in LookApplier.VisualRenderers(prefab))
-                renderer.enabled = false;
         if (look.Sprites.Count == 0)
             return;
 

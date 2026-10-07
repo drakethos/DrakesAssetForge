@@ -122,7 +122,13 @@ BronzeBuilds/
     "sprites": [                                // flat images: pivot bottom centre, facing +Z (forward), alpha cut out
       { "file": "textures/banner.png", "size": [0.6, 1.2], "position": [0, 0.5, 0.12], "rotation": [0, 0, 0], "doubleSided": true }
     ],
-    "hideMesh": false,                          // true: only the sprites show (colliders stay)
+    "hideMesh": false,                          // true: only parts and sprites show (colliders stay)
+    "scale": 1.5,                               // whole model (or [x, y, z]); items: held + dropped, pieces: incl. collision
+    "parts": [                                  // kitbash: other prefabs' meshes, positioned in this prefab's space
+      { "prefab": "TrophySkeleton", "child": "skull",     // child: only meshes whose name contains it (optional)
+        "position": [0, 0.03, 0.5], "rotation": [0, 180, 0], "scale": 0.55,
+        "materials": [ { "target": "Skeleton", "tint": "#B8E0A0" } ] }   // overrides for this part only
+    ],
     "icon": "textures/gate_icon.png"
   },
 

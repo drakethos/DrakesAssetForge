@@ -257,15 +257,19 @@ public static class RecipeSerializer
         if (recipe.Look.Mesh is { Prefab: null, File: null })
             problems.Add("look.mesh needs \"prefab\" or \"file\".");
 
-        for (var i = 0; i < recipe.Look.Materials.Count; i++)
+        ValidateMaterials(recipe.Look.Materials, "look.materials", problems);
+        for (var i = 0; i < recipe.Look.Parts.Count; i++)
         {
-            var m = recipe.Look.Materials[i];
-            if (m.Tint != null && !TryParseColor(m.Tint, out _))
-                problems.Add($"look.materials[{i}].tint \"{m.Tint}\" is not #RRGGBB or #RRGGBBAA.");
-            foreach (var c in m.Colors)
-                if (!TryParseColor(c.Value, out _))
-                    problems.Add($"look.materials[{i}].colors.{c.Key} \"{c.Value}\" is not a color.");
+            var part = recipe.Look.Parts[i];
+            if (string.IsNullOrWhiteSpace(part.Prefab))
+                problems.Add($"look.parts[{i}] needs \"prefab\".");
+            if (part.Scale.X <= 0 || part.Scale.Y <= 0 || part.Scale.Z <= 0)
+                problems.Add($"look.parts[{i}] ({part.Prefab}): scale must be above 0.");
+            ValidateMaterials(part.Materials, $"look.parts[{i}].materials", problems);
         }
+
+        if (recipe.Look.Scale.X <= 0 || recipe.Look.Scale.Y <= 0 || recipe.Look.Scale.Z <= 0)
+            problems.Add("look.scale must be above 0.");
 
         foreach (var s in recipe.Look.Sprites)
             if (s.Width <= 0 || s.Height <= 0)
@@ -293,6 +297,19 @@ public static class RecipeSerializer
 
         if (recipe.Snap != null && recipe.Snap.Mode != SnapMode.Keep && recipe.Kind == RecipeKind.Item)
             problems.Add("Snap points only apply to pieces.");
+    }
+
+    private static void ValidateMaterials(List<MaterialOverride> materials, string where, List<string> problems)
+    {
+        for (var i = 0; i < materials.Count; i++)
+        {
+            var m = materials[i];
+            if (m.Tint != null && !TryParseColor(m.Tint, out _))
+                problems.Add($"{where}[{i}].tint \"{m.Tint}\" is not #RRGGBB or #RRGGBBAA.");
+            foreach (var c in m.Colors)
+                if (!TryParseColor(c.Value, out _))
+                    problems.Add($"{where}[{i}].colors.{c.Key} \"{c.Value}\" is not a color.");
+        }
     }
 
     /// <summary>
@@ -343,56 +360,33 @@ public static class RecipeSerializer
             result.Mesh = new MeshSource { Prefab = Str(mesh, "prefab"), File = Str(mesh, "file") };
 
         if (look["materials"] is { IsArray: true } materials)
+            result.Materials = ReadMaterials(materials, "look.materials", problems);
+
+        result.HideMesh = look["hideMesh"]?.AsBool() ?? false;
+        result.Scale = ReadScale(look["scale"], "look.scale", problems);
+        if (look["parts"] is { IsArray: true } parts)
         {
-            foreach (var m in materials.Items)
+            foreach (var part in parts.Items)
             {
-                if (!m.IsObject)
+                if (!part.IsObject || Str(part, "prefab") is not { } prefab)
                 {
-                    problems.Add("look.materials entries must be objects.");
+                    problems.Add("look.parts entries need \"prefab\".");
                     continue;
                 }
 
-                var o = new MaterialOverride
+                var position = ReadVector(part["position"], 3, "look.parts.position", problems);
+                var rotation = ReadVector(part["rotation"], 3, "look.parts.rotation", problems);
+                result.Parts.Add(new PartRecipe
                 {
-                    Target = Str(m, "target"),
-                    Slot = m["slot"]?.AsNumber() is { } slot ? (int)slot : null,
-                    Shader = Str(m, "shader"),
-                    Tint = Str(m, "tint")
-                };
-
-                if (m["from"] is { } from)
-                {
-                    if (from.Kind == JsonKind.String)
-                    {
-                        o.FromPrefab = from.StringValue;
-                    }
-                    else if (from.IsObject)
-                    {
-                        o.FromPrefab = Str(from, "prefab");
-                        o.FromMaterial = Str(from, "material");
-                    }
-                }
-
-                if (m["textures"] is { IsObject: true } textures)
-                    foreach (var t in textures.Properties)
-                        if (t.Value.AsString() is { } path)
-                            o.Textures[t.Key] = path;
-
-                if (m["floats"] is { IsObject: true } floats)
-                    foreach (var f in floats.Properties)
-                        if (f.Value.AsNumber() is { } n)
-                            o.Floats[f.Key] = (float)n;
-
-                if (m["colors"] is { IsObject: true } colors)
-                    foreach (var c in colors.Properties)
-                        if (c.Value.AsString() is { } color)
-                            o.Colors[c.Key] = color;
-
-                result.Materials.Add(o);
+                    Prefab = prefab,
+                    Child = Str(part, "child"),
+                    Position = position == null ? default : new Vec3(position[0], position[1], position[2]),
+                    Rotation = rotation == null ? default : new Vec3(rotation[0], rotation[1], rotation[2]),
+                    Scale = ReadScale(part["scale"], "look.parts.scale", problems),
+                    Materials = part["materials"] is { IsArray: true } pm ? ReadMaterials(pm, $"look.parts ({prefab}).materials", problems) : new List<MaterialOverride>()
+                });
             }
         }
-
-        result.HideMesh = look["hideMesh"]?.AsBool() ?? false;
         if (look["sprites"] is { IsArray: true } sprites)
         {
             foreach (var s in sprites.Items)
@@ -421,6 +415,73 @@ public static class RecipeSerializer
         return result;
     }
 
+    /// <summary>A number (uniform) or [x, y, z]; missing = 1.</summary>
+    private static Vec3 ReadScale(JsonValue? value, string what, List<string> problems)
+    {
+        if (value == null)
+            return new Vec3(1, 1, 1);
+        if (value.AsNumber() is { } uniform)
+            return new Vec3((float)uniform, (float)uniform, (float)uniform);
+        var v = ReadVector(value, 3, what, problems);
+        return v == null ? new Vec3(1, 1, 1) : new Vec3(v[0], v[1], v[2]);
+    }
+
+    private static JsonValue WriteScale(Vec3 v) =>
+        v.X == v.Y && v.Y == v.Z ? Tidy(v.X) : Vector(v.X, v.Y, v.Z);
+
+    private static List<MaterialOverride> ReadMaterials(JsonValue materials, string where, List<string> problems)
+    {
+        var result = new List<MaterialOverride>();
+        foreach (var m in materials.Items)
+        {
+            if (!m.IsObject)
+            {
+                problems.Add($"{where} entries must be objects.");
+                continue;
+            }
+
+            var o = new MaterialOverride
+            {
+                Target = Str(m, "target"),
+                Slot = m["slot"]?.AsNumber() is { } slot ? (int)slot : null,
+                Shader = Str(m, "shader"),
+                Tint = Str(m, "tint")
+            };
+
+            if (m["from"] is { } from)
+            {
+                if (from.Kind == JsonKind.String)
+                {
+                    o.FromPrefab = from.StringValue;
+                }
+                else if (from.IsObject)
+                {
+                    o.FromPrefab = Str(from, "prefab");
+                    o.FromMaterial = Str(from, "material");
+                }
+            }
+
+            if (m["textures"] is { IsObject: true } textures)
+                foreach (var t in textures.Properties)
+                    if (t.Value.AsString() is { } path)
+                        o.Textures[t.Key] = path;
+
+            if (m["floats"] is { IsObject: true } floats)
+                foreach (var f in floats.Properties)
+                    if (f.Value.AsNumber() is { } n)
+                        o.Floats[f.Key] = (float)n;
+
+            if (m["colors"] is { IsObject: true } colors)
+                foreach (var c in colors.Properties)
+                    if (c.Value.AsString() is { } color)
+                        o.Colors[c.Key] = color;
+
+            result.Add(o);
+        }
+
+        return result;
+    }
+
     /// <summary>[x, y(, z)] → floats, or null (with a problem when present but malformed).</summary>
     private static float[]? ReadVector(JsonValue? value, int length, string what, List<string> problems)
     {
@@ -433,6 +494,59 @@ public static class RecipeSerializer
         }
 
         return value.Items.Select(i => (float)i.NumberValue).ToArray();
+    }
+
+    private static JsonValue WriteMaterials(List<MaterialOverride> materials)
+    {
+        var arr = JsonValue.NewArray();
+        foreach (var m in materials)
+        {
+            var o = JsonValue.NewObject();
+            SetIf(o, "target", m.Target);
+            if (m.Slot.HasValue)
+                o.Set("slot", m.Slot.Value);
+            if (m.FromMaterial != null)
+            {
+                var from = JsonValue.NewObject();
+                SetIf(from, "prefab", m.FromPrefab);
+                from.Set("material", m.FromMaterial);
+                o.Set("from", from);
+            }
+            else
+            {
+                SetIf(o, "from", m.FromPrefab);
+            }
+
+            SetIf(o, "shader", m.Shader);
+            SetIf(o, "tint", m.Tint);
+            if (m.Textures.Count > 0)
+            {
+                var t = JsonValue.NewObject();
+                foreach (var kv in m.Textures)
+                    t.Set(kv.Key, kv.Value);
+                o.Set("textures", t);
+            }
+
+            if (m.Floats.Count > 0)
+            {
+                var f = JsonValue.NewObject();
+                foreach (var kv in m.Floats)
+                    f.Set(kv.Key, Tidy(kv.Value));
+                o.Set("floats", f);
+            }
+
+            if (m.Colors.Count > 0)
+            {
+                var c = JsonValue.NewObject();
+                foreach (var kv in m.Colors)
+                    c.Set(kv.Key, kv.Value);
+                o.Set("colors", c);
+            }
+
+            arr.Add(o);
+        }
+
+        return arr;
     }
 
     private static JsonValue Vector(params float[] values)
@@ -455,60 +569,32 @@ public static class RecipeSerializer
         }
 
         if (look.Materials.Count > 0)
-        {
-            var arr = JsonValue.NewArray();
-            foreach (var m in look.Materials)
-            {
-                var o = JsonValue.NewObject();
-                SetIf(o, "target", m.Target);
-                if (m.Slot.HasValue)
-                    o.Set("slot", m.Slot.Value);
-                if (m.FromMaterial != null)
-                {
-                    var from = JsonValue.NewObject();
-                    SetIf(from, "prefab", m.FromPrefab);
-                    from.Set("material", m.FromMaterial);
-                    o.Set("from", from);
-                }
-                else
-                {
-                    SetIf(o, "from", m.FromPrefab);
-                }
-
-                SetIf(o, "shader", m.Shader);
-                SetIf(o, "tint", m.Tint);
-                if (m.Textures.Count > 0)
-                {
-                    var t = JsonValue.NewObject();
-                    foreach (var kv in m.Textures)
-                        t.Set(kv.Key, kv.Value);
-                    o.Set("textures", t);
-                }
-
-                if (m.Floats.Count > 0)
-                {
-                    var f = JsonValue.NewObject();
-                    foreach (var kv in m.Floats)
-                        f.Set(kv.Key, Tidy(kv.Value));
-                    o.Set("floats", f);
-                }
-
-                if (m.Colors.Count > 0)
-                {
-                    var c = JsonValue.NewObject();
-                    foreach (var kv in m.Colors)
-                        c.Set(kv.Key, kv.Value);
-                    o.Set("colors", c);
-                }
-
-                arr.Add(o);
-            }
-
-            obj.Set("materials", arr);
-        }
+            obj.Set("materials", WriteMaterials(look.Materials));
 
         if (look.HideMesh)
             obj.Set("hideMesh", true);
+        if (look.HasScale)
+            obj.Set("scale", WriteScale(look.Scale));
+        if (look.Parts.Count > 0)
+        {
+            var arr = JsonValue.NewArray();
+            foreach (var part in look.Parts)
+            {
+                var o = JsonValue.NewObject().Set("prefab", part.Prefab);
+                SetIf(o, "child", part.Child);
+                if (part.Position.X != 0 || part.Position.Y != 0 || part.Position.Z != 0)
+                    o.Set("position", Vector(part.Position.X, part.Position.Y, part.Position.Z));
+                if (part.Rotation.X != 0 || part.Rotation.Y != 0 || part.Rotation.Z != 0)
+                    o.Set("rotation", Vector(part.Rotation.X, part.Rotation.Y, part.Rotation.Z));
+                if (part.Scale.X != 1 || part.Scale.Y != 1 || part.Scale.Z != 1)
+                    o.Set("scale", WriteScale(part.Scale));
+                if (part.Materials.Count > 0)
+                    o.Set("materials", WriteMaterials(part.Materials));
+                arr.Add(o);
+            }
+
+            obj.Set("parts", arr);
+        }
         if (look.Sprites.Count > 0)
         {
             var arr = JsonValue.NewArray();

@@ -27,6 +27,7 @@ internal static class InstanceSync
             ReplaceChild(prefab, instance, GameNames.VisualChild);
             ReplaceChild(prefab, instance, GameNames.GlowChild);
             ReplaceChild(prefab, instance, GameNames.SpritesChild);
+            SyncParts(prefab, instance);
 
             foreach (var renderer in LookApplier.VisualRenderers(instance))
             {
@@ -67,6 +68,23 @@ internal static class InstanceSync
                 var col = ps.colorOverLifetime;
                 col.color = src.colorOverLifetime.color;
             }
+    }
+
+    /// <summary>Kitbash parts and model scale live on the visual root (attach on items).</summary>
+    private static void SyncParts(GameObject prefab, GameObject instance)
+    {
+        Parts.Remove(instance);
+        var from = Parts.VisualRoot(prefab);
+        var to = Parts.VisualRoot(instance);
+        to.localScale = from.localScale;
+        var holder = from.Find(GameNames.PartsChild);
+        if (holder == null)
+            return;
+        var copy = Object.Instantiate(holder.gameObject, to, false);
+        copy.name = GameNames.PartsChild;
+        copy.transform.localPosition = holder.localPosition;
+        copy.transform.localRotation = holder.localRotation;
+        copy.transform.localScale = holder.localScale;
     }
 
     private static void ReplaceChild(GameObject prefab, GameObject instance, string name)

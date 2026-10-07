@@ -20,6 +20,7 @@ internal sealed class LookBaseline
     private Sprite? _pieceIcon;
     private SnapPoints.Snapshot? _snaps;
     private Effects.Snapshot _effects = new();
+    private Vector3 _visualScale = Vector3.one;
 
     public static LookBaseline Capture(GameObject prefab)
     {
@@ -39,6 +40,7 @@ internal sealed class LookBaseline
         }
 
         baseline._effects = Effects.Capture(prefab);
+        baseline._visualScale = Parts.VisualRoot(prefab).localScale;
         ByPrefab[prefab] = baseline;
         return baseline;
     }
@@ -70,6 +72,8 @@ internal sealed class LookBaseline
         DestroyChild(prefab, GameNames.VisualChild);
         DestroyChild(prefab, GameNames.GlowChild);
         DestroyChild(prefab, GameNames.SpritesChild);
+        Parts.Remove(prefab);
+        Parts.VisualRoot(prefab).localScale = _visualScale;
         Effects.Restore(_effects);
 
         foreach (var (renderer, materials, enabled) in _renderers)

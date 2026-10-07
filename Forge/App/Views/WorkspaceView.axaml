@@ -328,6 +328,60 @@
                                         <Button Grid.Column="2" Classes="small ghost" Content="Clear" Command="{Binding ClearMeshCommand}" IsVisible="{Binding HasMeshSwap}" />
                                     </Grid>
                                     <TextBlock Classes="muted" Text="Keep the base's shape, or show another Valheim prefab's mesh instead." />
+                                    <Grid ColumnDefinitions="Auto,90,*" ColumnSpacing="8" Margin="0,4,0,0">
+                                        <TextBlock Text="Model scale ×" Classes="muted" VerticalAlignment="Center" />
+                                        <TextBox Grid.Column="1" Text="{Binding ModelScale}" ToolTip.Tip="Scales the whole model (and its collision); 1 = unchanged" />
+                                        <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap"
+                                                   Text="Items: held and dropped. Pieces: placed, collision included." />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                            <!-- Kitbashing: other prefabs' meshes on this model -->
+                            <Border Classes="section">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="PARTS (KITBASH)" Classes="h" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="small" Content="+ Add part…" Command="{Binding AddPartCommand}" />
+                                    </Grid>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !HasParts}"
+                                               Text="Build new shapes from pieces of Valheim: a skull on a key, a lantern on a pole. Parts are borrowed by name, so nothing from Valheim is copied into your pack." />
+                                    <ItemsControl ItemsSource="{Binding PartRows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PartRow">
+                                                <Border Classes="snaprow" Classes.selected="{Binding IsSelected}" Padding="8" Margin="0,0,0,6" CornerRadius="6">
+                                                    <StackPanel Spacing="6">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                                            <Button Classes="snapnum" Background="#B07CE8" Content="{Binding Number}" Command="{Binding SelectCommand}"
+                                                                    ToolTip.Tip="Select (highlighted; drag its purple handle in the viewport)" />
+                                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding Prefab}" FontWeight="SemiBold" />
+                                                                <TextBlock Text="{Binding MeshNames}" Classes="mono" FontSize="10.5" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding MeshNames}" />
+                                                            </StackPanel>
+                                                            <Button Grid.Column="2" Classes="small ghost" Content="×" Command="{Binding RemoveCommand}" VerticalAlignment="Top" ToolTip.Tip="Remove this part" />
+                                                        </Grid>
+                                                        <Grid ColumnDefinitions="70,*,*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="6" RowSpacing="6">
+                                                            <TextBlock Text="Position" Classes="muted" VerticalAlignment="Center" />
+                                                            <TextBox Grid.Column="1" Text="{Binding X}" ToolTip.Tip="X (m)" />
+                                                            <TextBox Grid.Column="2" Text="{Binding Y}" ToolTip.Tip="Y (m, up)" />
+                                                            <TextBox Grid.Column="3" Text="{Binding Z}" ToolTip.Tip="Z (m)" />
+                                                            <TextBlock Grid.Row="1" Text="Rotation °" Classes="muted" VerticalAlignment="Center" />
+                                                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding RotX}" ToolTip.Tip="Tilt (X)" />
+                                                            <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding RotY}" ToolTip.Tip="Turn (Y)" />
+                                                            <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding RotZ}" ToolTip.Tip="Roll (Z)" />
+                                                            <TextBlock Grid.Row="2" Text="Scale ×" Classes="muted" VerticalAlignment="Center" />
+                                                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Scale}" />
+                                                            <TextBlock Grid.Row="3" Text="Only meshes" Classes="muted" VerticalAlignment="Center" />
+                                                            <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Child}"
+                                                                     PlaceholderText="all (or part of a mesh name above)"
+                                                                     ToolTip.Tip="Keep only meshes whose name contains this, e.g. the skull of a trophy" />
+                                                        </Grid>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding HasParts}"
+                                               Text="Each part's materials are in the material list below (&quot;Part n · …&quot;): tint, borrow or retexture them like any other." />
                                 </StackPanel>
                             </Border>
                             <Border Classes="section">

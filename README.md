@@ -33,6 +33,8 @@ Full list in [CHANGELOG.md](CHANGELOG.md). Packs using these need **Forge Runtim
   station, hammer tab, and a glow light.
 - **Snap points**: auto-detected from the model's shape, or drag numbered points in the viewport (lock to an axis or
   level, stick to edges or a grid), each named by where it sits ("bottom-left corner").
+- **Kitbashing**: build new shapes from pieces of Valheim, no modelling. Scale a swamp key up, put a skull on it, give
+  each part its own materials; drag parts in the viewport. Parts are borrowed by name, so packs stay tiny.
 - **Sprites**: put flat pictures (PNG with transparency) on any item or piece: a banner on a pole, a sign, a poster,
   a note lying on the floor. Size, position, rotation, one or both sides; or hide the base model so the picture is
   the whole look. No 3D modelling needed.
@@ -58,7 +60,8 @@ Full list in [CHANGELOG.md](CHANGELOG.md). Packs using these need **Forge Runtim
 | ![Fire and glow colours](docs/screenshots/7-ward-fire.png) | ![Remove a component](docs/screenshots/7b-ward-remove-confirm.png) |
 | ![Added Rigidbody](docs/screenshots/7d-ward-components.png) | ![Plain C# export](docs/screenshots/4c-publish-plain.png) |
 | ![Sprite banner](docs/screenshots/8-sprite-banner.png) | ![Publish](docs/screenshots/4-publish.png) |
-| ![Snap tool](docs/screenshots/9-snap-tool.png) | ![Settings](docs/screenshots/6-settings.png) |
+| ![Kitbash: skull key](docs/screenshots/10-kitbash-skullkey.png) | ![Snap tool](docs/screenshots/9-snap-tool.png) |
+| ![Settings](docs/screenshots/6-settings.png) | |
 
 ## Where it's going
 
@@ -69,8 +72,6 @@ every pack can be exported as code you own.
 
 ### Coming next
 
-- **Kitbashing**: build new shapes from pieces of existing ones, without modelling. Scale a swamp key up, put a skull
-  on it, give each part its own materials. Parts are borrowed by name like meshes are today, so packs stay tiny.
 - **Model export**: any Valheim mesh with its textures as `.glb`, to open in Blender (for your own editing; Valheim's
   files can't be redistributed).
 - **Model import**: your own static `.glb` meshes in packs, loaded by Forge Runtime. No Unity, no asset bundles.

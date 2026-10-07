@@ -27,6 +27,11 @@ internal static class LookApplier
         if (look.Icon != null)
             ApplyIcon(prefab, look.Icon, pack, textures, warnings);
         // Last, so material overrides and slot numbers only ever see the model's own renderers.
+        // hideMesh hides the model's own meshes only: before parts and sprites are added.
+        if (look.HideMesh)
+            foreach (var renderer in VisualRenderers(prefab))
+                renderer.enabled = false;
+        Parts.Apply(prefab, look, pack, textures, warnings);
         Sprites.Apply(prefab, look, pack, textures, warnings);
     }
 
@@ -85,7 +90,7 @@ internal static class LookApplier
             warnings.Add("look.mesh changes the dropped/world model only; the equipped model is unchanged");
     }
 
-    private static void ApplyMaterials(GameObject prefab, List<MaterialOverride> overrides, LoadedPack pack, TextureCache textures, List<string> warnings)
+    internal static void ApplyMaterials(GameObject prefab, List<MaterialOverride> overrides, LoadedPack pack, TextureCache textures, List<string> warnings)
     {
         // Built once per override + original material, so slots sharing a material keep sharing it.
         var built = new Dictionary<(int, Material), Material>();

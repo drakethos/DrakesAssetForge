@@ -229,6 +229,42 @@ internal static class Screenshots
                 poleEditor.SaveNow();
             }
 
+            // Kitbash: the swamp key, bigger, with a skull on its end (borrowed from the skeleton trophy).
+            var skullKey = new Format.ItemRecipe { Id = "screens_skullkey", Base = "CryptKey", Kind = Format.RecipeKind.Item, Name = "Skull Key" };
+            vm.Pack!.SaveRecipe(skullKey);
+            vm.Workspace.Reload(skullKey);
+            await Settle(window, 4000);
+            if (vm.Workspace.Editor is { } keyEditor)
+            {
+                keyEditor.ModelScale = 1.5;
+                keyEditor.AddPartCommand.Execute(null);
+                if (vm.Workspace.Picker is { } partPicker)
+                {
+                    partPicker.CancelCommand.Execute(null);
+                    vm.Workspace.Picker = null;
+                }
+
+                // Same as picking it in the dialog.
+                var addPart = typeof(ItemEditorViewModel).GetMethod("AddPartRow", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+                var skull = (PartRow)addPart.Invoke(keyEditor, new object[] { new PartRow("TrophySkeleton"), new List<Format.MaterialOverride>() })!;
+                await Settle(window, 3000);
+                skull.Z = 0.5;
+                skull.Y = 0.03;
+                skull.RotY = 180;
+                skull.Scale = 0.55;
+                keyEditor.SelectedPart = skull;
+                if (skull.Materials.FirstOrDefault(m => m.Target == "Skeleton") is { } bone)
+                {
+                    bone.TintOn = true;
+                    bone.Tint = "#B8E0A0";
+                }
+
+                await Settle(window, 1500);
+                Save(window, outDir, "10-kitbash-skullkey");
+                keyEditor.SaveNow();
+                Console.WriteLine("kitbash recipe: " + File.ReadAllText(vm.Pack!.RecipePath(skullKey)).Replace("\n", " ").Replace("  ", ""));
+            }
+
             // Duplicate, then copy + paste (a second copy under the next free id).
             vm.Workspace.Selected = vm.Workspace.Items.FirstOrDefault(i => i.Recipe.Id == "screens_banner_pole");
             await Settle(window, 500);

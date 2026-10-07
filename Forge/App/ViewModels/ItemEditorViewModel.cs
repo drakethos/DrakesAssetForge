@@ -103,6 +103,12 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         Components = new ComponentsPanel(ScheduleSave);
 
         _hideMesh = recipe.Look.HideMesh;
+        _modelScale = Math.Round(recipe.Look.Scale.X, 4);
+        if (recipe.Look.Scale.X != recipe.Look.Scale.Y || recipe.Look.Scale.Y != recipe.Look.Scale.Z)
+            _modelScaleVector = recipe.Look.Scale;
+        PartRows.CollectionChanged += OnRowsChanged;
+        foreach (var part in recipe.Look.Parts)
+            AddPartRow(PartRow.From(part), part.Materials);
         Sprites.CollectionChanged += OnRowsChanged;
         foreach (var s in recipe.Look.Sprites)
             AddSpriteRow(SpriteRow.From(s, Images.LoadFile(main.Pack?.FullPath(s.File))));
@@ -169,6 +175,95 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     {
         Refresh();
         ScheduleSave();
+    }
+
+    // Kitbash parts: other prefabs' meshes on this model
+    public ObservableCollection<PartRow> PartRows { get; } = new();
+    public bool HasParts => PartRows.Count > 0;
+    [ObservableProperty] private PartRow? _selectedPart;
+    /// <summary>Whole-model scale (uniform in the editor; a hand-written non-uniform scale is kept until edited).</summary>
+    [ObservableProperty] private double _modelScale = 1;
+    private Vec3? _modelScaleVector;
+
+    /// <summary>The scale the viewport shows: the model scale (vector if the recipe had one).</summary>
+    private Vector3 ViewScale => _modelScaleVector is { } v ? new Vector3(v.X, v.Y, v.Z) : new Vector3((float)Math.Max(ModelScale, 0.001));
+
+    partial void OnModelScaleChanged(double value)
+    {
+        _modelScaleVector = null;
+        Refresh();
+        ScheduleSave();
+    }
+
+    partial void OnSelectedPartChanged(PartRow? oldValue, PartRow? newValue)
+    {
+        if (oldValue != null)
+            oldValue.IsSelected = false;
+        if (newValue != null)
+            newValue.IsSelected = true;
+        Refresh();
+    }
+
+    /// <summary>Pick a Valheim prefab; its meshes are added at the model's origin, selected so they can be dragged.</summary>
+    [RelayCommand]
+    private void AddPart() =>
+        _main.Workspace.Picker = new AssetPickerViewModel(_main, PickerMode.Mesh, "Add a part: pick a prefab whose meshes to put on this model", (prefab, _) =>
+        {
+            var row = AddPartRow(new PartRow(prefab), new List<MaterialOverride>());
+            SelectedPart = row;
+            if (!TabLook)
+                Tab = "Look";
+        });
+
+    private PartRow AddPartRow(PartRow row, List<MaterialOverride> overrides)
+    {
+        row.RemoveCommand = new RelayCommand(() =>
+        {
+            if (SelectedPart == row)
+                SelectedPart = null;
+            foreach (var m in row.Materials)
+                Materials.Remove(m);
+            PartRows.Remove(row);
+        });
+        row.SelectCommand = new RelayCommand(() => SelectedPart = SelectedPart == row ? null : row);
+        PartRows.Add(row);
+        _ = LoadPartAsync(row, overrides);
+        return row;
+    }
+
+    /// <summary>Loads the part's model, then its materials (listed with the model's own, prefixed "Part n").</summary>
+    private async Task LoadPartAsync(PartRow row, List<MaterialOverride> overrides)
+    {
+        if (Vanilla?.TryLoadPreviewAsync(row.Prefab) is not { } task)
+        {
+            Status($"'{row.Prefab}' isn't in this Valheim install.");
+            return;
+        }
+
+        try
+        {
+            row.Model = (await task).Model;
+        }
+        catch (Exception ex)
+        {
+            Status($"Couldn't read '{row.Prefab}': {ex.Message}");
+            return;
+        }
+
+        var names = row.Model?.Parts.Select(p => p.Name.Split('#')[0].Split('/').Last()).Distinct().ToList() ?? new List<string>();
+        row.MeshNames = names.Count == 0 ? "no meshes" : "meshes: " + string.Join(", ", names);
+        foreach (var group in (row.Model?.Materials ?? Array.Empty<ModelMaterial>()).GroupBy(m => m.Info.Name))
+        {
+            var first = group.First();
+            var editor = new MaterialEditor(this, group.Key, first.Info, first.Albedo, group.Count()) { Part = row };
+            if (overrides.FirstOrDefault(o => o.Target == group.Key) is { } o && Pack != null)
+                editor.LoadFrom(o, Pack);
+            row.Materials.Add(editor);
+            if (Materials.Count > 0)
+                Materials.Add(editor);
+        }
+
+        Refresh();
     }
 
     [RelayCommand]
@@ -310,10 +405,12 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     public bool LockZ => SnapConstraint == "z";
     public bool LockFloor => SnapConstraint == "floor";
     public static readonly double[] GridSteps = { 0, 0.05, 0.1, 0.25, 0.5, 1 };
-    public bool MarkerEditing => TabSnap && SnapEditable;
-    public string ViewportHint => MarkerEditing
-        ? "Drag a numbered point to move it · Delete removes the selected one · drag elsewhere to orbit · wheel to zoom"
-        : "Drag to orbit · wheel to zoom · double-click to reset. Approximate shading; Push to game for the real look.";
+    public bool MarkerEditing => (TabSnap && SnapEditable) || (TabLook && HasParts);
+    public string ViewportHint => !MarkerEditing
+        ? "Drag to orbit · wheel to zoom · double-click to reset. Approximate shading; Push to game for the real look."
+        : TabLook
+            ? "Drag a purple P handle to move that part · Delete removes the selected part · drag elsewhere to orbit · wheel to zoom"
+            : "Drag a numbered point to move it · Delete removes the selected one · drag elsewhere to orbit · wheel to zoom";
 
     partial void OnSnapConstraintChanged(string value)
     {
@@ -361,22 +458,40 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         SelectedSnap = null;
     }
 
-    // IMarkerEditor: the viewport picks and drags your points (ids are row indices).
-    public void SelectMarker(int id) => SelectedSnap = SnapPoints.ElementAtOrDefault(id);
+    /// <summary>Marker ids from here up are kitbash parts (below are snap points).</summary>
+    private const int PartMarkerBase = 1000;
+
+    // IMarkerEditor: the viewport picks and drags snap points and parts. Positions arrive in the viewport's
+    // (scaled) space; points and parts are stored in the model's own space.
+    public void SelectMarker(int id)
+    {
+        if (id >= PartMarkerBase)
+            SelectedPart = PartRows.ElementAtOrDefault(id - PartMarkerBase);
+        else
+            SelectedSnap = SnapPoints.ElementAtOrDefault(id);
+    }
 
     public void MoveMarker(int id, Vector3 unityPosition, string constraint)
     {
-        if (SnapPoints.ElementAtOrDefault(id) is not { } row)
-            return;
-        var snapped = SnapGeometry.Snap(unityPosition, _shape, SnapToEdges, (float)SnapGrid,
+        var local = unityPosition / ViewScale;
+        var snapped = SnapGeometry.Snap(local, _shape, SnapToEdges, (float)SnapGrid,
             constraint is "free" or "x" or "floor", constraint is "free" or "y", constraint is "free" or "z" or "floor");
-        row.MoveTo(snapped);
+        if (id >= PartMarkerBase)
+            PartRows.ElementAtOrDefault(id - PartMarkerBase)?.MoveTo(snapped);
+        else
+            SnapPoints.ElementAtOrDefault(id)?.MoveTo(snapped);
     }
 
     public void EndMarkerDrag(int id) => ScheduleSave();
 
     public void DeleteMarker(int id)
     {
+        if (id >= PartMarkerBase)
+        {
+            PartRows.ElementAtOrDefault(id - PartMarkerBase)?.RemoveCommand?.Execute(null);
+            return;
+        }
+
         if (SnapPoints.ElementAtOrDefault(id) is { } row)
         {
             SnapPoints.Remove(row);
@@ -479,6 +594,10 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
             Materials.Add(body);
         }
 
+        foreach (var row in PartRows)
+            foreach (var editor in row.Materials)
+                Materials.Add(editor);
+
         SelectedMaterial = Materials.Skip(1).FirstOrDefault(m => m.IsModified) ?? Materials.ElementAtOrDefault(1) ?? all;
         OnPropertyChanged(nameof(HasWornLook));
         if (HasWornLook && !_wornDefaulted)
@@ -509,12 +628,23 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
 
         var worn = ShowWorn && model.WornParts.Count > 0;
         var parts = (worn ? model.WornParts : model.Parts).ToList();
-        // Sprites sit on the dropped/placed model, as in game.
+        var scale = ViewScale;
+        // Parts, scale and sprites belong to the dropped/placed model, as in game.
         if (!worn && !CompareToBase)
         {
             if (HideMesh)
                 parts.Clear();
-            parts.AddRange(Sprites.Where(s => !s.IsMissing).Select((s, i) => s.ToPart(SpriteRow.SlotBase + i)));
+            for (var i = 0; i < PartRows.Count; i++)
+                parts.AddRange(PartRows[i].ViewParts(i));
+            if (scale != Vector3.One)
+                parts = parts.Select(p => PartRow.Transform(p, Matrix4x4.CreateScale(scale), Matrix4x4.Identity, p.MaterialSlot)).ToList();
+            // Items scale their visual (attach) only; their sprites sit on the root and keep their size.
+            var spriteScale = IsItem ? Vector3.One : scale;
+            parts.AddRange(Sprites.Where(s => !s.IsMissing).Select((s, i) =>
+            {
+                var part = s.ToPart(SpriteRow.SlotBase + i);
+                return spriteScale == Vector3.One ? part : PartRow.Transform(part, Matrix4x4.CreateScale(spriteScale), Matrix4x4.Identity, part.MaterialSlot);
+            }));
         }
 
         var sprites = Sprites.Where(s => !s.IsMissing).ToList();
@@ -528,8 +658,24 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         var all = editors.FirstOrDefault(e => e.IsAll);
         var selected = SelectedMaterial;
         var compare = CompareToBase;
+        var partRows = PartRows.ToList();
         Look = slot =>
         {
+            if (slot >= PartRow.SlotBase)
+            {
+                var row = partRows.ElementAtOrDefault((slot - PartRow.SlotBase) / PartRow.SlotStride);
+                var local = (slot - PartRow.SlotBase) % PartRow.SlotStride;
+                if (row?.Model is not { } partModel)
+                    return new SlotLook(null, new Vector4(0.8f, 0.8f, 0.8f, 1f));
+                var partLook = SoftwareRenderer.DefaultLook(partModel, local);
+                if (local >= partModel.Materials.Count)
+                    return partLook;
+                var editor = row.Materials.FirstOrDefault(e => e.Target == partModel.Materials[local].Info.Name);
+                if (editor is { IsModified: true })
+                    partLook = editor.Apply(partLook, false);
+                return (editor != null && editor == selected) || row.IsSelected ? partLook with { Highlight = true } : partLook;
+            }
+
             if (slot >= SpriteRow.SlotBase)
                 return new SlotLook(sprites[slot - SpriteRow.SlotBase].Image, Vector4.One);
             var look = SoftwareRenderer.DefaultLook(model, slot);
@@ -548,7 +694,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         // The placed model (not worn, not compare) is what snap points belong to.
         if (!worn && !CompareToBase)
         {
-            _shape = SnapGeometry.Bounds(parts);
+            var unscaled = SnapGeometry.Bounds(parts);
+            _shape = unscaled.IsEmpty ? unscaled : new Box(unscaled.Min / scale, unscaled.Max / scale);
             ShapeText = _shape.IsEmpty ? "" : $"Model: {_shape.Size.X:0.##} wide × {_shape.Size.Y:0.##} tall × {_shape.Size.Z:0.##} deep (m)";
         }
 
@@ -558,10 +705,14 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         {
             var mode = SnapMode;
             if (mode != "replace")
-                markers.AddRange((_base?.Info.SnapPoints ?? Array.Empty<Vector3>()).Select(p => new Marker(p, 0xFF7FB2E5)));
+                markers.AddRange((_base?.Info.SnapPoints ?? Array.Empty<Vector3>()).Select(p => new Marker(p * scale, 0xFF7FB2E5)));
             if (mode != "keep")
-                markers.AddRange(SnapPoints.Select((p, i) => new Marker(p.Position, 0xFFE8893C, 11, i, (i + 1).ToString(), p.IsSelected)));
+                markers.AddRange(SnapPoints.Select((p, i) => new Marker(p.Position * scale, 0xFFE8893C, 11, i, (i + 1).ToString(), p.IsSelected)));
         }
+
+        // Parts: a purple handle each on the Look tab, dragged like snap points.
+        if (TabLook && !worn && !CompareToBase)
+            markers.AddRange(PartRows.Select((r, i) => new Marker(r.Position * scale, 0xFFB07CE8, 11, PartMarkerBase + i, "P" + (i + 1), r.IsSelected)));
 
         Markers = markers;
     }
@@ -639,7 +790,7 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
             row.PropertyChanged += (_, a) =>
             {
                 // Display-only properties (numbers, labels, selection) are set by Refresh itself.
-                if (a.PropertyName is not (nameof(SnapRow.Label) or nameof(SnapRow.Number) or nameof(SnapRow.IsSelected)))
+                if (a.PropertyName is not (nameof(SnapRow.Label) or nameof(SnapRow.Number) or nameof(SnapRow.IsSelected) or nameof(PartRow.MeshNames)))
                     RowEdited(sender);
             };
         RowEdited(sender);
@@ -647,7 +798,16 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
 
     private void RowEdited(object? collection)
     {
-        if (collection == SnapPoints || collection == Sprites)
+        if (collection == PartRows)
+        {
+            for (var i = 0; i < PartRows.Count; i++)
+                PartRows[i].Number = i + 1;
+            OnPropertyChanged(nameof(HasParts));
+            OnPropertyChanged(nameof(MarkerEditing));
+            OnPropertyChanged(nameof(ViewportHint));
+        }
+
+        if (collection == SnapPoints || collection == Sprites || collection == PartRows)
             Refresh();
         if (collection == Sprites)
             OnPropertyChanged(nameof(HasSprites));
@@ -676,7 +836,9 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
 
         Recipe.Look.Mesh = MeshFrom.Length > 0 ? new MeshSource { Prefab = MeshFrom } : null;
         Recipe.Look.Icon = IconFile.Length > 0 ? IconFile : null;
-        Recipe.Look.Materials = Materials.Select(m => m.ToOverride()).Where(o => o != null).Select(o => o!).ToList();
+        Recipe.Look.Materials = Materials.Where(m => m.Part == null).Select(m => m.ToOverride()).Where(o => o != null).Select(o => o!).ToList();
+        Recipe.Look.Parts = PartRows.Select(r => r.ToRecipe()).ToList();
+        Recipe.Look.Scale = _modelScaleVector ?? new Vec3((float)Math.Round(Math.Max(ModelScale, 0.001), 4), (float)Math.Round(Math.Max(ModelScale, 0.001), 4), (float)Math.Round(Math.Max(ModelScale, 0.001), 4));
         Recipe.Look.Sprites = Sprites.Select(s => s.ToRecipe()).ToList();
         Recipe.Look.HideMesh = HideMesh;
 

@@ -7,6 +7,7 @@ Two things release from this repo, each with its own version and tag:
 
 ## App: unreleased
 
+- **Kitbashing**: Parts on the Look tab add other Valheim prefabs' meshes to your item or piece (a skull on a key, a lantern on a pole), each with its own position, rotation, scale and materials (listed as "Part n · …" in the material list). Drag parts by their purple handle in the viewport, with the same axis locks and edge/grid snapping as snap points; "Only meshes" keeps part of a prefab. **Model scale** resizes the whole model (items: held and dropped; pieces: placed, collision included). Plain C# export and `render`/`validate` support them. Needs Forge Runtime with parts support.
 - Pack list: **Duplicate** (Ctrl+D), **Copy** (Ctrl+C) and **Paste** (Ctrl+V), also on right-click. Copies get a free id (`_copy`, `_copy2`…); a reskin's copy becomes its own item or piece. Paste works across packs and brings the item's images along.
 - Command line: `inspect`, `validate`, `render` (preview PNG), `new-pack`, and `export-code` flags, so packs can be made and checked without the UI.
 - Plain C# export: **Images inside the DLL** (flatten-proof), **Use DrakeModsLibs helpers** (Libs 0.10 `DrakeModsLibs.Forge`), and **Looks only** for mods that register their own items (RenameIt's paper uses all three).

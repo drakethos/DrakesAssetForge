@@ -146,6 +146,34 @@ public class RecipeTests
     }
 
     [Fact]
+    public void Kitbash_parts_and_scale_round_trip()
+    {
+        var problems = new List<string>();
+        var r = RecipeSerializer.ReadRecipe("""
+            { "id": "skullkey", "base": "CryptKey", "look": { "scale": 2, "parts": [
+              { "prefab": "TrophySkeleton", "child": "skull", "position": [0, 0.1, 0.45], "rotation": [0, 180, 0], "scale": 0.6,
+                "materials": [ { "target": "Skeleton", "tint": "#C0FFC0" } ] },
+              { "prefab": "Wood", "scale": [1, 2, 1] } ] } }
+            """, problems);
+
+        Assert.Empty(problems);
+        Assert.Equal(2f, r.Look.Scale.Y);
+        Assert.Equal(2, r.Look.Parts.Count);
+        var skull = r.Look.Parts[0];
+        Assert.Equal("skull", skull.Child);
+        Assert.Equal(0.45f, skull.Position.Z);
+        Assert.Equal(180f, skull.Rotation.Y);
+        Assert.Equal(0.6f, skull.Scale.X);
+        Assert.Equal("#C0FFC0", skull.Materials[0].Tint);
+        Assert.Equal(2f, r.Look.Parts[1].Scale.Y);
+
+        var text = RecipeSerializer.WriteRecipe(r);
+        Assert.Contains("\"scale\": 2", text);
+        Assert.Equal(text, RecipeSerializer.WriteRecipe(RecipeSerializer.ReadRecipe(text, problems)));
+        Assert.Empty(problems);
+    }
+
+    [Fact]
     public void Resolve_refuses_paths_outside_the_pack()
     {
         var pack = new LoadedPack(Path.GetTempPath(), new ForgePack());

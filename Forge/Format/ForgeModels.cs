@@ -75,8 +75,33 @@ public sealed class LookRecipe
     public List<SpriteRecipe> Sprites { get; set; } = new();
     /// <summary>Hide the base's own mesh, e.g. when sprites replace it. Colliders stay.</summary>
     public bool HideMesh { get; set; }
+    /// <summary>Scales the whole placed/dropped model, colliders included (1 = unchanged).</summary>
+    public Vec3 Scale { get; set; } = new(1, 1, 1);
+    /// <summary>Kitbashing: meshes borrowed from other vanilla prefabs, placed on this one.</summary>
+    public List<PartRecipe> Parts { get; set; } = new();
 
-    public bool IsEmpty => Mesh == null && Materials.Count == 0 && Icon == null && Sprites.Count == 0 && !HideMesh;
+    public bool HasScale => Scale.X != 1 || Scale.Y != 1 || Scale.Z != 1;
+
+    public bool IsEmpty => Mesh == null && Materials.Count == 0 && Icon == null && Sprites.Count == 0 && !HideMesh && !HasScale && Parts.Count == 0;
+}
+
+/// <summary>
+/// A kitbash part: another vanilla prefab's static meshes (highest detail), placed on this model. Borrowed by
+/// name like <see cref="MeshSource"/>, so packs stay tiny. Optional <see cref="Child"/> keeps only matching meshes.
+/// </summary>
+public sealed class PartRecipe
+{
+    /// <summary>Vanilla prefab to take the meshes from ("TrophySkeleton").</summary>
+    public string Prefab { get; set; } = "";
+    /// <summary>Only meshes whose object name contains this (case-insensitive); null = all of them.</summary>
+    public string? Child { get; set; }
+    /// <summary>Local to the prefab root, in metres.</summary>
+    public Vec3 Position { get; set; }
+    /// <summary>Euler angles in degrees, Unity order (Z, then X, then Y).</summary>
+    public Vec3 Rotation { get; set; }
+    public Vec3 Scale { get; set; } = new(1, 1, 1);
+    /// <summary>Material overrides for this part only (target = the part's material names).</summary>
+    public List<MaterialOverride> Materials { get; set; } = new();
 }
 
 /// <summary>

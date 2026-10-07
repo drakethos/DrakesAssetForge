@@ -131,8 +131,13 @@ public sealed partial class MaterialEditor : ObservableObject
     public bool IsArmor => Target == MaterialOverride.ArmorTarget;
     public PackProject? Pack => _owner.Pack;
 
-    public string Title => IsArmor ? "Worn on the body" : Target ?? "All materials";
-    public string Subtitle => IsAll
+    /// <summary>Set for a kitbash part's material: the part it belongs to (its overrides only touch that part).</summary>
+    public PartRow? Part { get; init; }
+
+    public string Title => Part != null ? $"Part {Part.Number} · {Target}" : IsArmor ? "Worn on the body" : Target ?? "All materials";
+    public string Subtitle => Part != null
+        ? $"{Part.Prefab} · {Original?.Shader} · {Original?.MainTextureName ?? "no texture"}"
+        : IsAll
         ? "Applies to every mesh slot without its own override"
         : IsArmor
             ? $"{Original?.Name} · {Original?.Shader} · painted on the player when worn"

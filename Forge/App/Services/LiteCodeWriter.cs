@@ -333,7 +333,7 @@ public static class LiteCodeWriter
         }
 
         var look = recipe.Look;
-        if (!look.IsEmpty && (!lookOnly || look.Mesh != null || look.Materials.Count > 0 || look.HideMesh))
+        if (!look.IsEmpty && (!lookOnly || look.Mesh != null || look.Materials.Count > 0 || look.HideMesh || look.HasScale || look.Parts.Count > 0))
         {
             L();
             L("// Look");
@@ -348,6 +348,21 @@ public static class LiteCodeWriter
             // After materials, as in Forge: overrides never touch the sprites.
             if (look.HideMesh)
                 L("ForgeLite.HideMesh(prefab);");
+            // Kitbash: model scale, then other prefabs' meshes (each restyled on its own).
+            if (look.HasScale)
+                L($"ForgeLite.Scale(prefab, {V(look.Scale)});");
+            for (var i = 0; i < look.Parts.Count; i++)
+            {
+                var part = look.Parts[i];
+                L($"var part{i} = ForgeLite.AddPart(prefab, {Str(part.Prefab)}, {NullableStr(part.Child)}, {V(part.Position)}, {V(part.Rotation)}, {V(part.Scale)});");
+                if (part.Materials.Count == 0)
+                    continue;
+                L($"if (part{i} != null)");
+                L("{");
+                foreach (var ov in part.Materials)
+                    MaterialCall(ov, l => L("    " + l.Replace("\n", "\n    ")), $"part{i}");
+                L("}");
+            }
             foreach (var s in lookOnly ? new List<SpriteRecipe>() : look.Sprites)
                 L($"ForgeLite.AddSprite(prefab.transform, {Str(s.File)}, {F(s.Width)}, {F(s.Height)}, new Vector3({F(s.Position.X)}, {F(s.Position.Y)}, {F(s.Position.Z)}), " +
                   $"new Vector3({F(s.Rotation.X)}, {F(s.Rotation.Y)}, {F(s.Rotation.Z)}), {Bool(s.DoubleSided)});");
@@ -434,7 +449,7 @@ public static class LiteCodeWriter
         }
     }
 
-    private static void MaterialCall(MaterialOverride ov, Action<string> line)
+    private static void MaterialCall(MaterialOverride ov, Action<string> line, string target = "prefab")
     {
         var edits = new List<string>();
         if (ov.Tint != null && Color(ov.Tint) is { } tint)
@@ -451,9 +466,9 @@ public static class LiteCodeWriter
         var label = ov.Target == MaterialOverride.ArmorTarget ? "worn on the body" : ov.Target ?? (ov.Slot.HasValue ? $"slot {ov.Slot}" : "all materials");
         line($"// Material: {label}");
         if (ov.Target == MaterialOverride.ArmorTarget)
-            line($"ForgeLite.ArmorMaterial(prefab, {NullableStr(ov.FromPrefab)}, {NullableStr(ov.FromMaterial)}, {NullableStr(ov.Shader)}, {edit});");
+            line($"ForgeLite.ArmorMaterial({target}, {NullableStr(ov.FromPrefab)}, {NullableStr(ov.FromMaterial)}, {NullableStr(ov.Shader)}, {edit});");
         else
-            line($"ForgeLite.Material(prefab, {NullableStr(ov.Target)}, {(ov.Slot.HasValue ? ov.Slot.Value.ToString(Inv) : "null")}, " +
+            line($"ForgeLite.Material({target}, {NullableStr(ov.Target)}, {(ov.Slot.HasValue ? ov.Slot.Value.ToString(Inv) : "null")}, " +
                  $"{NullableStr(ov.FromPrefab)}, {NullableStr(ov.FromMaterial)}, {NullableStr(ov.Shader)}, {edit});");
     }
 
@@ -659,6 +674,7 @@ public static class LiteCodeWriter
 
     // ---- literals ----
 
+    private static string V(Vec3 v) => $"new Vector3({F(v.X)}, {F(v.Y)}, {F(v.Z)})";
     private static string F(double v) => ((float)v).ToString("R", Inv) + "f";
     private static string Bool(bool b) => b ? "true" : "false";
     private static string Str(string s) => "\"" + CodeProjectWriter.Escape(s).Replace("\n", "\\n").Replace("\r", "") + "\"";

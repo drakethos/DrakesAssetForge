@@ -17,7 +17,7 @@ install when the game loads, so a pack is a few small text files plus whatever P
 - **Remove and add components**: a ward without warding, a piece with a Rigidbody, any Valheim script with its defaults.
 - **Plain C# export**: your items as readable Jotunn code, no Forge needed.
 
-Full list in [CHANGELOG.md](CHANGELOG.md). Packs using these need **Forge Runtime 0.2.0**.
+Full list in [CHANGELOG.md](CHANGELOG.md). Packs using these need **Forge Runtime 0.2.1**.
 
 ## What you can do
 
@@ -126,8 +126,8 @@ One workflow, two release trains, picked by tag (version must match the project 
 
 | Tag | Builds | Publishes |
 |---|---|---|
-| `app-v0.2.0` | `Forge/App` self-contained win-x64 (with Forge Runtime + source bundled) | GitHub Release (draft) |
-| `runtime-v0.2.0` | `Forge/Runtime` Thunderstore package | GitHub Release (draft); Thunderstore and Hexium only when enabled |
+| `app-v0.2.1` | `Forge/App` self-contained win-x64 (with Forge Runtime + source bundled) | GitHub Release (draft) |
+| `runtime-v0.2.1` | `Forge/Runtime` Thunderstore package | GitHub Release (draft); Thunderstore and Hexium only when enabled |
 
 GitHub releases are created as **drafts**: check the notes and files on the Releases page, then press *Publish release*.
 

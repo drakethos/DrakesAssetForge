@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Packaging release: version aligned with Drakes Asset Forge 0.2.1. No functional changes since 0.2.0.
+
 ## 0.2.0
 
 - `look.sprites`: flat images (alpha cut out, one or two sided) placed on the prefab; `look.hideMesh` hides the model's own mesh.

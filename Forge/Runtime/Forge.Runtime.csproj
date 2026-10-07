@@ -6,7 +6,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <!-- Release tag runtime-v{Version} must match (checked by .github/workflows/release.yml). -->
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <!-- Thunderstore-style plugin folder so the dev deploy matches a real install. -->
     <ForgePluginFolder>DrakeMods-DrakesForgeRuntime</ForgePluginFolder>
   </PropertyGroup>

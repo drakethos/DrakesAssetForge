@@ -5,6 +5,12 @@ Two things release from this repo, each with its own version and tag:
 - **Drakes Asset Forge** (the desktop app): tags `app-v*`
 - **Drakes Forge Runtime** (the BepInEx mod packs need): tags `runtime-v*`, changelog in [Forge/Runtime/thunderstore/CHANGELOG.md](Forge/Runtime/thunderstore/CHANGELOG.md)
 
+## App 0.2.1
+
+Data packs made with 0.2.1 need **Forge Runtime 0.2.1** (their manifest says so).
+
+- Packaging release cut from the 0.2.0 line: no functional changes since `app-v0.2.0` / `runtime-v0.2.0`. App and Forge Runtime version numbers and the data-pack runtime dependency pin are aligned at 0.2.1.
+
 ## App 0.2.0
 
 Data packs made with 0.2.0 need **Forge Runtime 0.2.0** (their manifest says so).

@@ -149,7 +149,17 @@
                     <Button Classes="small ghost" HorizontalAlignment="Center" Content="Remove selected item" Command="{Binding DeleteSelectedCommand}" />
                 </StackPanel>
                 <Panel>
-                    <ListBox IsVisible="{Binding LibPack}" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Margin="6,0">
+                    <ListBox x:Name="PackList"
+                             IsVisible="{Binding LibPack}"
+                             ItemsSource="{Binding Items}"
+                             SelectedItem="{Binding Selected}"
+                             Margin="6,0"
+                             ContextRequested="OnPackListContextRequested">
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Remove" Command="{Binding DeleteSelectedCommand}" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:PackListItem">
                                 <Grid ColumnDefinitions="34,*" ColumnSpacing="10">

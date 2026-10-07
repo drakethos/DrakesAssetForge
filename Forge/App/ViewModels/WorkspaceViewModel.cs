@@ -56,7 +56,13 @@ public sealed partial class WorkspaceViewModel : ObservableObject
 
     public void Reload(ItemRecipe? select = null)
     {
-        Editor?.SaveNow();
+        // Only flush the open editor when its recipe is still on the pack. Saving after
+        // DeleteRecipe would recreate the file and put the item back on the list.
+        if (Editor != null && _main.Pack?.Recipes.Contains(Editor.Recipe) == true)
+            Editor.SaveNow();
+        else
+            Editor?.DiscardPendingSave();
+
         Items.Clear();
         Sources.Clear();
         var pack = _main.Pack;
@@ -112,7 +118,10 @@ public sealed partial class WorkspaceViewModel : ObservableObject
 
     partial void OnSelectedChanged(PackListItem? value)
     {
-        Editor?.SaveNow();
+        if (Editor != null && _main.Pack?.Recipes.Contains(Editor.Recipe) == true)
+            Editor.SaveNow();
+        else
+            Editor?.DiscardPendingSave();
         Editor = value != null ? new ItemEditorViewModel(value.Recipe, _main) : null;
     }
 
@@ -136,8 +145,16 @@ public sealed partial class WorkspaceViewModel : ObservableObject
     {
         if (Selected == null || _main.Pack == null)
             return;
-        _main.Pack.DeleteRecipe(Selected.Recipe);
-        _main.RecipeSaved($"removed {Selected.Recipe.Id}");
+
+        var recipe = Selected.Recipe;
+        // Drop the open editor without saving. Reload()/OnSelectedChanged call SaveNow, and
+        // SaveRecipe would recreate the file and put the recipe back on the pack list.
+        Editor?.DiscardPendingSave();
+        Editor = null;
+        Selected = null;
+
+        _main.Pack.DeleteRecipe(recipe);
+        _main.RecipeSaved($"removed {recipe.Id}");
         Reload();
     }
 

@@ -132,7 +132,7 @@ One workflow, two release trains, picked by tag (version must match the project 
 
 | Tag | Builds | Publishes |
 |---|---|---|
-| `app-v0.2.1` | Portable win-x64 zip **and** Hexium/Gale **Tools** zip (`DrakeMods-DrakesAssetForge-…`, exe + icon + README/screenshots) | GitHub Release (draft); Hexium when `PUBLISH_HEXIUM` or `PUBLISH_HEXIUM_APP` is `true` |
+| `app-v0.2.1` | Portable win-x64 zip **and** Hexium/Gale **Tools** zip (`DrakeMods-DrakesAssetForgeTool-…`, exe + pdb + TOOL icon + README/screenshots) | GitHub Release (draft); Hexium when `PUBLISH_HEXIUM` or `PUBLISH_HEXIUM_APP` is `true` |
 | `runtime-v0.2.1` | `Forge/Runtime` Thunderstore package | GitHub Release (draft); Thunderstore when `PUBLISH_THUNDERSTORE=true`; Hexium only when `PUBLISH_HEXIUM_RUNTIME=true` (occasional — not tied to every Tools/app tag) |
 
 GitHub releases are created as **drafts**: check the notes and files on the Releases page, then press *Publish release*.

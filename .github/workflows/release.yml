@@ -1,9 +1,11 @@
 name: Release
 
 # One repo, two release trains, picked by tag:
-#   app-v1.2.3      → Drakes Asset Forge (desktop app), self-contained win-x64 zip → GitHub Release
+#   app-v1.2.3      → Drakes Asset Forge (desktop app): portable win-x64 zip + Hexium/Gale
+#                     Thunderstore-format zip (exe + icon + manifest, Tools/Modpack) → GitHub Release;
+#                     Hexium upload when PUBLISH_HEXIUM is 'true'.
 #   runtime-v1.2.3  → Drakes Forge Runtime (BepInEx mod) Thunderstore zip → GitHub Release,
-#                     then Thunderstore / Hexium only when the repo variables PUBLISH_THUNDERSTORE / PUBLISH_HEXIUM are 'true'.
+#                     then Thunderstore / Hexium only when PUBLISH_THUNDERSTORE / PUBLISH_HEXIUM are 'true'.
 # GitHub releases are created as drafts: review them on the Releases page, then press "Publish release".
 # The tag's version must equal <Version> in the project file.
 
@@ -40,6 +42,9 @@ jobs:
     defaults:
       run:
         shell: pwsh
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      hexium_zip: ${{ steps.hexium.outputs.zip }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -68,14 +73,41 @@ jobs:
             -p:DebugType=None -p:DebugSymbols=false -o dist/app
           Get-ChildItem dist/app -Recurse -Filter *.pdb | Remove-Item
           if (-not (Test-Path dist/app/runtime/DrakesForgeRuntime.dll)) { Write-Error "Forge Runtime wasn't bundled"; exit 1 }
+          if (-not (Test-Path dist/app/DrakesAssetForge.exe)) { Write-Error "DrakesAssetForge.exe missing from publish output"; exit 1 }
           Copy-Item README.md, LICENSE, CHANGELOG.md dist/app/
 
-      - name: Zip
+      - name: Zip portable
         id: zip
         run: |
           $name = "DrakesAssetForge-${{ steps.ver.outputs.version }}-win-x64"
           python -c "import shutil; shutil.make_archive('$name', 'zip', 'dist/app')"
           "zip=$name.zip" >> $env:GITHUB_OUTPUT
+
+      # Thunderstore/Hexium-compatible package: runnable exe + 256x256 icon + manifest (Tools / Modpack).
+      - name: Hexium / Gale package
+        id: hexium
+        run: |
+          $version = "${{ steps.ver.outputs.version }}"
+          $description = "Desktop app (exe) to make Valheim items, pieces and reskins without Unity. Install via Gale/Hexium, run DrakesAssetForge.exe from the profile plugins folder."
+          if ($description.Length -gt 256) { Write-Error "description too long"; exit 1 }
+          New-Item -ItemType Directory -Force pkg-app | Out-Null
+          Copy-Item -Path dist/app/* -Destination pkg-app -Recurse -Force
+          Copy-Item Forge/App/thunderstore/icon.png, Forge/App/thunderstore/README.md, CHANGELOG.md pkg-app/ -Force
+          if (-not (Test-Path pkg-app/DrakesAssetForge.exe)) { Write-Error "Hexium package missing DrakesAssetForge.exe"; exit 1 }
+          if (-not (Test-Path pkg-app/icon.png)) { Write-Error "Hexium package missing icon.png"; exit 1 }
+          [ordered]@{
+            name = "DrakesAssetForge"
+            version_number = $version
+            website_url = "https://github.com/${{ github.repository }}"
+            description = $description
+            dependencies = @(
+              "DrakeMods-DrakesForgeRuntime-$version",
+              "ValheimModding-Jotunn-$env:JOTUNN_VERSION"
+            )
+          } | ConvertTo-Json | Set-Content pkg-app/manifest.json -Encoding utf8NoBOM
+          $zip = "DrakeMods-DrakesAssetForge-$version.zip"
+          python -c "import shutil; shutil.make_archive('DrakeMods-DrakesAssetForge-$version', 'zip', 'pkg-app')"
+          "zip=$zip" >> $env:GITHUB_OUTPUT
 
       - name: GitHub Release
         uses: softprops/action-gh-release@v2
@@ -84,17 +116,60 @@ jobs:
           name: "Drakes Asset Forge ${{ steps.ver.outputs.version }}"
           draft: true
           make_latest: "true"
-          files: ${{ steps.zip.outputs.zip }}
+          files: |
+            ${{ steps.zip.outputs.zip }}
+            ${{ steps.hexium.outputs.zip }}
           body: |
             ## Drakes Asset Forge ${{ steps.ver.outputs.version }}
 
             Make Valheim items, build pieces and reskins without Unity. Windows, no .NET install needed.
 
+            ### Portable
             **Download** `${{ steps.zip.outputs.zip }}`, unzip anywhere, run `DrakesAssetForge.exe`.
-            You need Valheim installed and a mod-manager profile with BepInEx + Jotunn to test in;
-            ⚙ Settings can install Forge Runtime into it.
+
+            ### Hexium / Gale (exe + icon + modpack package)
+            Import **`${{ steps.hexium.outputs.zip }}`** (or install from Hexium when published).
+            Gale places it under `BepInEx/plugins/DrakeMods-DrakesAssetForge/` — run `DrakesAssetForge.exe` from there.
+            The package depends on **Forge Runtime** + Jotunn so the profile is ready for push/test.
+            Categories: **Tools**, **Modpack**, **Valheim 1.0**.
 
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md).
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-hexium-zip
+          path: ${{ steps.hexium.outputs.zip }}
+          if-no-files-found: error
+
+  publish-hexium-app:
+    needs: app
+    if: |
+      always()
+      && needs.app.result == 'success'
+      && vars.PUBLISH_HEXIUM == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-hexium-zip
+          path: dist
+      - name: Publish app package to Hexium
+        env:
+          HEXIUM_TOKEN: ${{ secrets.HEXIUM_TOKEN }}
+          ZIP_NAME: ${{ needs.app.outputs.hexium_zip }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HEXIUM_TOKEN}" ]; then
+            echo "::error::HEXIUM_TOKEN secret is not set" >&2
+            exit 1
+          fi
+          python3 .github/scripts/publish-hexium.py \
+            --file "dist/${ZIP_NAME}" \
+            --repository "https://valheim.hexium.gg" \
+            --namespace "DrakeMods" \
+            --communities "valheim" \
+            --categories "Tools,Modpack,Valheim 1.0,Open Source"
 
   # ── Forge Runtime (BepInEx mod) ──────────────────────────────────────────────
   runtime:

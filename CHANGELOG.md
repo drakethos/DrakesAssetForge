@@ -9,7 +9,8 @@ Two things release from this repo, each with its own version and tag:
 
 Data packs made with 0.2.1 need **Forge Runtime 0.2.1** (their manifest says so).
 
-- Packaging release cut from the 0.2.0 line: no functional changes since `app-v0.2.0` / `runtime-v0.2.0`. App and Forge Runtime version numbers and the data-pack runtime dependency pin are aligned at 0.2.1.
+- **Hexium / Gale package** for the desktop app: self-contained `DrakesAssetForge.exe` (not a plugin DLL), 256×256 `icon.png`, Thunderstore-compatible `manifest.json` / README / CHANGELOG. Install into a profile, then run the exe from `BepInEx/plugins/DrakeMods-DrakesAssetForge/`. Tagged **Tools** + **Modpack**; depends on Forge Runtime 0.2.1 and Jotunn so the profile is ready to push/test packs.
+- App and Forge Runtime version numbers and the data-pack runtime dependency pin aligned at 0.2.1. Portable `DrakesAssetForge-*-win-x64.zip` still ships on the GitHub Release.
 
 ## App 0.2.0
 

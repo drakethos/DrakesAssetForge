@@ -86,8 +86,14 @@ Ideas and requests: [issues](https://github.com/drakethos/DrakesAssetForge/issue
 
 ## Get it
 
-Download **`DrakesAssetForge-<version>-win-x64.zip`** from [Releases](https://github.com/drakethos/DrakesAssetForge/releases),
-unzip anywhere, run `DrakesAssetForge.exe`. No .NET install needed.
+**Portable:** download **`DrakesAssetForge-<version>-win-x64.zip`** from
+[Releases](https://github.com/drakethos/DrakesAssetForge/releases), unzip anywhere, run `DrakesAssetForge.exe`.
+No .NET install needed.
+
+**Hexium / Gale:** install the **`DrakeMods-DrakesAssetForge`** package (exe + icon + modpack-style
+dependencies). Gale puts it under `BepInEx/plugins/DrakeMods-DrakesAssetForge/` — run `DrakesAssetForge.exe`
+from there. The package pulls **Forge Runtime** and Jotunn. Same zip is attached to the GitHub Release as
+`DrakeMods-DrakesAssetForge-<version>.zip` for "Import local mod".
 
 You need Valheim installed (the app reads it; it never changes it) and a mod-manager profile with BepInEx and
 Jotunn to test in. ⚙ Settings can install Forge Runtime into that profile for you.
@@ -126,13 +132,14 @@ One workflow, two release trains, picked by tag (version must match the project 
 
 | Tag | Builds | Publishes |
 |---|---|---|
-| `app-v0.2.1` | `Forge/App` self-contained win-x64 (with Forge Runtime + source bundled) | GitHub Release (draft) |
+| `app-v0.2.1` | Portable win-x64 zip **and** Hexium/Gale package (`DrakesAssetForge.exe` + icon + manifest, Tools/Modpack) | GitHub Release (draft); Hexium when `PUBLISH_HEXIUM=true` |
 | `runtime-v0.2.1` | `Forge/Runtime` Thunderstore package | GitHub Release (draft); Thunderstore and Hexium only when enabled |
 
 GitHub releases are created as **drafts**: check the notes and files on the Releases page, then press *Publish release*.
 
 Store uploads are off until you turn them on with repository variables `PUBLISH_THUNDERSTORE=true` /
-`PUBLISH_HEXIUM=true` (secrets `THUNDERSTORE_TOKEN`, `HEXIUM_TOKEN`).
+`PUBLISH_HEXIUM=true` (secrets `THUNDERSTORE_TOKEN`, `HEXIUM_TOKEN`). App Hexium upload uses
+`.github/scripts/publish-hexium.py` (same as LockSmith / RenameIt).
 
 ## License
 

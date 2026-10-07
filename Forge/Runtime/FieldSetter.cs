@@ -49,8 +49,20 @@ internal static class FieldSetter
     // Returns obj so a boxed struct can be assigned back to its parent field.
     private static object SetPath(object obj, string[] path, int index, JsonValue value)
     {
-        var field = FindField(obj.GetType(), path[index])
-            ?? throw new MissingFieldException($"{obj.GetType().Name} has no field '{path[index]}'");
+        var field = FindField(obj.GetType(), path[index]);
+        if (field == null && index == path.Length - 1)
+        {
+            // Unity components (Rigidbody.mass, BoxCollider.size, Light.color) expose properties, not fields.
+            var property = obj.GetType().GetProperty(path[index], BindingFlags.Instance | BindingFlags.Public);
+            if (property is { CanWrite: true })
+            {
+                property.SetValue(obj, Convert(value, property.PropertyType));
+                return obj;
+            }
+        }
+
+        if (field == null)
+            throw new MissingFieldException($"{obj.GetType().Name} has no field '{path[index]}'");
 
         if (index == path.Length - 1)
         {

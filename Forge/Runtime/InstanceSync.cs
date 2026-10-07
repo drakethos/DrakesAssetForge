@@ -23,6 +23,7 @@ internal static class InstanceSync
             if (instance == prefab || GameNames.PrefabName(instance.name) != prefab.name)
                 continue;
 
+            CopyEffects(prefab, instance);
             ReplaceChild(prefab, instance, GameNames.VisualChild);
             ReplaceChild(prefab, instance, GameNames.GlowChild);
 
@@ -38,6 +39,33 @@ internal static class InstanceSync
         }
 
         return count;
+    }
+
+    /// <summary>Light and particle settings, matched by path (fire colour on braziers already placed).</summary>
+    private static void CopyEffects(GameObject prefab, GameObject instance)
+    {
+        var lights = new Dictionary<string, Light>();
+        foreach (var l in prefab.GetComponentsInChildren<Light>(true))
+            lights[PathOf(l.transform, prefab.transform)] = l;
+        foreach (var l in instance.GetComponentsInChildren<Light>(true))
+            if (lights.TryGetValue(PathOf(l.transform, instance.transform), out var src))
+            {
+                l.color = src.color;
+                l.intensity = src.intensity;
+                l.range = src.range;
+            }
+
+        var systems = new Dictionary<string, ParticleSystem>();
+        foreach (var ps in prefab.GetComponentsInChildren<ParticleSystem>(true))
+            systems[PathOf(ps.transform, prefab.transform)] = ps;
+        foreach (var ps in instance.GetComponentsInChildren<ParticleSystem>(true))
+            if (systems.TryGetValue(PathOf(ps.transform, instance.transform), out var src))
+            {
+                var main = ps.main;
+                main.startColor = src.main.startColor;
+                var col = ps.colorOverLifetime;
+                col.color = src.colorOverLifetime.color;
+            }
     }
 
     private static void ReplaceChild(GameObject prefab, GameObject instance, string name)

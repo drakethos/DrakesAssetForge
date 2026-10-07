@@ -16,8 +16,13 @@ internal sealed class ForgeEntry
         Recipe = recipe;
         Pack = pack;
         Prefab = prefab;
+        // Structural changes first: the baseline is "the item as built", so hot reload never tries to undo them.
+        ComponentChanges.Apply(prefab, recipe, StructuralWarnings);
         Baseline = LookBaseline.Capture(prefab);
     }
+
+    /// <summary>Problems from removing/adding components when the item was built.</summary>
+    public List<string> StructuralWarnings { get; } = new();
 
     public ItemRecipe Recipe { get; set; }
     public LoadedPack Pack { get; set; }
@@ -92,6 +97,9 @@ internal sealed class ForgeRegistry
 
             if (!string.Equals(entry.Pack.Root, pack.Root, StringComparison.OrdinalIgnoreCase))
                 continue;
+            if (!entry.Recipe.RemoveComponents.SequenceEqual(recipe.RemoveComponents) ||
+                !entry.Recipe.AddComponents.Select(a => a.Type).SequenceEqual(recipe.AddComponents.Select(a => a.Type)))
+                ForgeLog.Source.LogWarning($"{recipe.Id}: added/removed components changed. Restart the game for that part; the rest reloads now.");
             if (entry.Recipe.Kind != recipe.Kind || entry.Recipe.Base != recipe.Base)
             {
                 ForgeLog.Source.LogWarning($"{recipe.Id}: kind or base changed. Restart the game to rebuild it.");
@@ -185,6 +193,7 @@ internal sealed class ForgeRegistry
     private List<string> ApplyAndBuild(ForgeEntry entry)
     {
         var warnings = Apply(entry);
+        warnings.InsertRange(0, entry.StructuralWarnings);
         Built(entry, false, warnings);
         return warnings;
     }
@@ -207,6 +216,7 @@ internal sealed class ForgeRegistry
                 SnapPoints.Apply(prefab, recipe.Snap);
         }
 
+        Effects.Apply(prefab, recipe.Effects, warnings);
         Behaviours.Apply(prefab, recipe.Behaviours, warnings);
         return warnings;
     }

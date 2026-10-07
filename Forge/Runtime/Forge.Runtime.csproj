@@ -41,6 +41,8 @@
     <Reference Include="UnityEngine" HintPath="$(ForgeManagedDir)\UnityEngine.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(ForgeManagedDir)\UnityEngine.CoreModule.dll" Private="false" />
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(ForgeManagedDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
+    <!-- Fire and glow effects. -->
+    <Reference Include="UnityEngine.ParticleSystemModule" HintPath="$(ForgeManagedDir)\UnityEngine.ParticleSystemModule.dll" Private="false" />
     <!-- Needed to resolve Jotunn's AssetBundle overloads even though Forge never loads bundles. -->
     <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(ForgeManagedDir)\UnityEngine.AssetBundleModule.dll" Private="false" />
     <!-- Unity 6 modules are built against netstandard 2.1; net481 only ships the 2.0 facade. -->

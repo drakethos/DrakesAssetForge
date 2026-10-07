@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `effects`: recolour every light and particle effect (fire, ward glow), scale light brightness and reach.
+- `components`: `remove` scripts (a ward without warding) and `add` Unity components or Valheim scripts.
+- Colours accept a strength, `#RRGGBB*k`, for HDR emission; setting `_EmissionColor` turns emission on.
+
 ## 0.1.0
 
 - First release: loads Forge packs (items, build pieces, reskins) from BepInEx/plugins and the Forge app's push folder.

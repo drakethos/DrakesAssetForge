@@ -51,16 +51,32 @@ public sealed partial class PublishViewModel : ObservableObject
 
     public bool Dirty { get; set; }
     public bool OutputZip => Output == "zip";
-    public bool OutputCode => Output == "code";
-    public string DependencyText => OutputZip
-        ? "Players need: " + string.Join(", ", ThunderstoreFiles.DataPackDependencies)
-        : "Players need: " + string.Join(", ", ThunderstoreFiles.CodeModDependencies) + " (Forge is compiled into your mod)";
+    /// <summary>Either C# output: the project actions are shared.</summary>
+    public bool OutputCode => Output is "code" or "plain";
+    public bool OutputForgeCode => Output == "code";
+    public bool OutputPlain => Output == "plain";
+    public string DependencyText => Output switch
+    {
+        "zip" => "Players need: " + string.Join(", ", ThunderstoreFiles.DataPackDependencies),
+        "plain" => "Players need: " + string.Join(", ", ThunderstoreFiles.CodeModDependencies) + " (plain C#, no Forge at all)",
+        _ => "Players need: " + string.Join(", ", ThunderstoreFiles.CodeModDependencies) + " (Forge is compiled into your mod)"
+    };
 
-    partial void OnOutputChanged(string value)
+    partial void OnOutputChanged(string? oldValue, string newValue)
     {
         OnPropertyChanged(nameof(OutputZip));
         OnPropertyChanged(nameof(OutputCode));
+        OnPropertyChanged(nameof(OutputForgeCode));
+        OnPropertyChanged(nameof(OutputPlain));
         OnPropertyChanged(nameof(DependencyText));
+        // Keep the two C# exports in separate default folders (their Customize files differ).
+        if (_main.Pack is { } pack && !IntoExisting)
+        {
+            if (newValue == "plain" && CodeFolder == CodeProjectWriter.DefaultFolder(pack))
+                CodeFolder = LiteCodeWriter.DefaultFolder(pack);
+            else if (newValue == "code" && CodeFolder == LiteCodeWriter.DefaultFolder(pack))
+                CodeFolder = CodeProjectWriter.DefaultFolder(pack);
+        }
     }
 
     public void Reload()
@@ -282,7 +298,7 @@ public sealed partial class PublishViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void GenerateCode()
+    private async Task GenerateCode()
     {
         var pack = _main.Pack;
         if (pack == null)
@@ -291,13 +307,34 @@ public sealed partial class PublishViewModel : ObservableObject
         CodeLog.Clear();
         try
         {
-            var result = CodeProjectWriter.Write(pack, CodeFolder, IntoExisting, _main.CurrentPushTarget, _main.Vanilla?.Catalog.Install.Root);
+            CodeExportResult result;
+            if (OutputPlain)
+            {
+                if (_main.Vanilla is not { } vanilla)
+                {
+                    Result = "Plain C# needs Valheim found (Settings): the code is typed from the game's own scripts.";
+                    return;
+                }
+
+                CodeLog.Add("Reading the game's scripts…");
+                var types = await LiteTypeInfo.LoadAsync(pack.Recipes, vanilla.InspectAsync, vanilla.ComponentDefaultsAsync);
+                CodeLog.Clear();
+                result = LiteCodeWriter.Write(pack, CodeFolder, IntoExisting, types, _main.CurrentPushTarget, vanilla.Catalog.Install.Root);
+            }
+            else
+            {
+                result = CodeProjectWriter.Write(pack, CodeFolder, IntoExisting, _main.CurrentPushTarget, _main.Vanilla?.Catalog.Install.Root);
+            }
+
             CodeLog.Add($"Updated {result.Written.Count} file(s) in {result.Folder}");
             foreach (var kept in result.Kept)
                 CodeLog.Add($"kept yours: {Path.GetRelativePath(result.Folder, kept)}");
-            CodeLog.Add(IntoExisting
-                ? "Added Forge\\, ForgeHooks.g.cs, Customize\\ and Pack\\. FORGE.md says what to add to your plugin and csproj."
-                : "Open the .csproj in your IDE, or press Build. Your code goes in Customize\\<Item>.cs.");
+            CodeLog.Add((IntoExisting, OutputPlain) switch
+            {
+                (true, true) => "Added Items\\, Lite\\, ForgeLiteItems.g.cs, Customize\\ and Assets\\. FORGE-PLAIN.md says what to add to your plugin and csproj.",
+                (true, false) => "Added Forge\\, ForgeHooks.g.cs, Customize\\ and Pack\\. FORGE.md says what to add to your plugin and csproj.",
+                _ => "Open the .csproj in your IDE, or press Build. Your code goes in Customize\\<Item>.cs."
+            });
             Result = $"C# project ready: {result.Folder}";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)

@@ -20,6 +20,11 @@ install when the game loads, so a pack is a few small text files plus whatever P
 - **Change anything**: every setting on the base's scripts (ItemDrop, Piece, WearNTear, Door, Container…) with its
   vanilla value, proper controls (dropdowns for enums, toggles, colours), search, and one-click reset. Costs, crafting
   station, hammer tab, snap points, and a glow light.
+- **Fire, light and glow colours**: recolour a brazier's flames and light, make a ward burn blue, and change
+  what a material glows (emission colour plus strength, so runes can glow brighter than plain white).
+- **Remove and add components**: a ward clone without warding (remove `PrivateArea`, after an "are you sure?"
+  that says what it costs), or add a Rigidbody, a collider, a light, or any Valheim script (Container, Door, Vagon…)
+  with the game's own default settings, all editable.
 - **Push to game**: installs the pack into your Gale / r2modman / Thunderstore Mod Manager profile and hot-reloads it
   while Valheim runs.
 - **Publish** as either:
@@ -27,11 +32,15 @@ install when the game loads, so a pack is a few small text files plus whatever P
     [Forge Runtime](#forge-runtime), or
   - a **C# mod project**: Forge compiled into your own mod (no runtime dependency) with a `Customize\<Item>.cs` file
     per item for your own code. Re-export any time; your code is kept.
+  - **plain C#**: each item as readable Jotunn code (typed settings, materials, fire colours) plus one small helper
+    file. No Forge and no pack files; only Jotunn is needed. Take it from there by hand.
 
 | | |
 |---|---|
 | ![Workspace](docs/screenshots/3-workspace-look.png) | ![Components](docs/screenshots/3d-components.png) |
 | ![Material picker](docs/screenshots/3f-material-picker.png) | ![Armour body textures](docs/screenshots/5b-dress-body.png) |
+| ![Fire and glow colours](docs/screenshots/7-ward-fire.png) | ![Remove a component](docs/screenshots/7b-ward-remove-confirm.png) |
+| ![Added Rigidbody](docs/screenshots/7d-ward-components.png) | ![Plain C# export](docs/screenshots/4c-publish-plain.png) |
 | ![Publish](docs/screenshots/4-publish.png) | ![Settings](docs/screenshots/6-settings.png) |
 
 ## Get it

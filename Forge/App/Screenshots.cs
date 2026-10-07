@@ -160,6 +160,56 @@ internal static class Screenshots
                 }
             }
 
+            // Ward clone: blue fire and runes, no warding, plus a Rigidbody.
+            var ward = new Format.ItemRecipe { Id = "screens_ward", Base = "guard_stone", Kind = Format.RecipeKind.Piece, Name = "Blue Ward" };
+            vm.Pack!.SaveRecipe(ward);
+            vm.Workspace.Reload(ward);
+            await Settle(window, 4000);
+            if (vm.Workspace.Editor is { } wardEditor)
+            {
+                wardEditor.LightColorOn = true;
+                wardEditor.LightColor = "#66AAFF";
+                wardEditor.LightIntensity = 1.5;
+                wardEditor.FlameTintOn = true;
+                wardEditor.FlameTint = "#4C8CFF";
+                if (wardEditor.Materials.FirstOrDefault(m => m.HasEmission && !m.IsAll) is { } runes)
+                {
+                    wardEditor.SelectedMaterial = runes;
+                    runes.EmissionOn = true;
+                    runes.EmissionColor = "#66AAFF";
+                    runes.EmissionStrength = 2.5;
+                }
+
+                await Settle(window, 1500);
+                Save(window, outDir, "7-ward-fire");
+
+                wardEditor.Tab = "Components";
+                await Settle(window, 1500);
+                if (wardEditor.Components.Components.OfType<ComponentCard>().FirstOrDefault(c => c.Label == "PrivateArea") is { } privateArea)
+                {
+                    foreach (var card in wardEditor.Components.Components)
+                        card.IsExpanded = false;
+                    privateArea.AskRemoveCommand.Execute(null);
+                    await Settle(window, 400);
+                    Save(window, outDir, "7b-ward-remove-confirm");
+                    privateArea.ConfirmRemoveCommand.Execute(null);
+                }
+
+                await wardEditor.Components.OpenAddCommand.ExecuteAsync(null);
+                await Settle(window, 1500);
+                Save(window, outDir, "7c-ward-add");
+                wardEditor.Components.AddSearch = "Rigidbody";
+                await Settle(window, 200);
+                if (wardEditor.Components.AddResults.FirstOrDefault() is { } rigid)
+                    await rigid.AddCommand.ExecuteAsync(null);
+                await Settle(window, 1000);
+                foreach (var card in wardEditor.Components.Components.OfType<ComponentCard>().Where(c => c.Label != "Rigidbody"))
+                    card.IsExpanded = false;
+                await Settle(window, 600);
+                Save(window, outDir, "7d-ward-components");
+                wardEditor.SaveNow();
+            }
+
             vm.GoTo(Step.Publish);
             await Settle(window, 600);
             vm.Publish.MakeIconCommand.Execute(null);
@@ -172,6 +222,12 @@ internal static class Screenshots
             vm.Publish.GenerateCodeCommand.Execute(null);
             await Settle(window, 500);
             Save(window, outDir, "4b-publish-code");
+
+            vm.Publish.SetOutputCommand.Execute("plain");
+            vm.Publish.CodeFolder = Path.Combine(Path.GetTempPath(), "forge-screens-plain");
+            await vm.Publish.GenerateCodeCommand.ExecuteAsync(null);
+            await Settle(window, 500);
+            Save(window, outDir, "4c-publish-plain");
 
             vm.OpenSettingsCommand.Execute(null);
             await Settle(window, 500);

@@ -19,6 +19,7 @@ internal sealed class LookBaseline
     private Material? _armorMaterial;
     private Sprite? _pieceIcon;
     private SnapPoints.Snapshot? _snaps;
+    private Effects.Snapshot _effects = new();
 
     public static LookBaseline Capture(GameObject prefab)
     {
@@ -37,6 +38,7 @@ internal sealed class LookBaseline
             baseline._snaps = SnapPoints.Capture(prefab);
         }
 
+        baseline._effects = Effects.Capture(prefab);
         ByPrefab[prefab] = baseline;
         return baseline;
     }
@@ -67,6 +69,7 @@ internal sealed class LookBaseline
     {
         DestroyChild(prefab, GameNames.VisualChild);
         DestroyChild(prefab, GameNames.GlowChild);
+        Effects.Restore(_effects);
 
         foreach (var (renderer, materials, enabled) in _renderers)
         {

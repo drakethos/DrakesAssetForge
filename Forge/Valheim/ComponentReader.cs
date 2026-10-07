@@ -33,6 +33,8 @@ public sealed class FieldNode
     public required FieldKind Kind { get; init; }
     /// <summary>C# type name from the game DLL, for tooltips.</summary>
     public required string TypeName { get; init; }
+    /// <summary>The type as C# source spells it ("float", "Piece.PieceCategory", "UnityEngine.Color"); null if unknown.</summary>
+    public string? CSharpType { get; init; }
     /// <summary>double (numbers/enums), bool, string, or float[] (colors/vectors).</summary>
     public object? Value { get; init; }
     public IReadOnlyList<EnumOption>? EnumOptions { get; init; }
@@ -51,7 +53,7 @@ public sealed class ComponentInfo
 /// Turns a MonoBehaviour's serialized data into <see cref="FieldNode"/>s. Values come from the bundle;
 /// types (enums and their names, flags) come from assembly_valheim via Mono.Cecil.
 /// </summary>
-internal sealed class ComponentReader
+internal sealed partial class ComponentReader
 {
     private const int MaxDepth = 6;
     private static readonly HashSet<string> EngineFields = new() { "m_GameObject", "m_Enabled", "m_Script", "m_Name", "m_EditorHideFlags", "m_EditorClassIdentifier" };
@@ -108,7 +110,7 @@ internal sealed class ComponentReader
 
         FieldNode Node(FieldKind kind, object? value = null, IReadOnlyList<FieldNode>? children = null, int count = 0, IReadOnlyList<EnumOption>? options = null, bool flags = false) => new()
         {
-            Name = name, Path = path, Label = Labelize(name), Kind = kind, TypeName = typeName, Value = value,
+            Name = name, Path = path, Label = Labelize(name), Kind = kind, TypeName = typeName, Value = value, CSharpType = CSharpName(def?.FieldType),
             Children = children ?? Array.Empty<FieldNode>(), Count = count, EnumOptions = options, IsFlags = flags
         };
 
@@ -195,6 +197,25 @@ internal sealed class ComponentReader
         {
             return null; // UnityEngine types etc. that aren't next to assembly_valheim
         }
+    }
+
+    public static string? CSharpName(TypeReference? type)
+    {
+        if (type == null)
+            return null;
+        return type.FullName switch
+        {
+            "System.Single" => "float",
+            "System.Double" => "double",
+            "System.Int32" => "int",
+            "System.UInt32" => "uint",
+            "System.Int64" => "long",
+            "System.Int16" => "short",
+            "System.Byte" => "byte",
+            "System.Boolean" => "bool",
+            "System.String" => "string",
+            var full => type.IsGenericInstance || type.IsArray ? null : "global::" + full.Replace('/', '.')
+        };
     }
 
     /// <summary>"m_maxDurability" → "Max durability", "m_itemData" → "Item data".</summary>

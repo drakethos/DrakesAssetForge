@@ -68,6 +68,14 @@ public sealed partial class ItemEditorViewModel : ObservableObject
         _glowRange = glow?.Settings.GetValueOrDefault("range")?.AsNumber() ?? 4;
         _glowNightOnly = glow?.Settings.GetValueOrDefault("nightOnly")?.AsBool() ?? false;
 
+        var fx = recipe.Effects;
+        _lightColorOn = fx?.LightColor != null;
+        _lightColor = fx?.LightColor ?? "#FFB066";
+        _lightIntensity = fx?.LightIntensity ?? 1;
+        _lightRange = fx?.LightRange ?? 1;
+        _flameTintOn = fx?.FlameTint != null;
+        _flameTint = fx?.FlameTint ?? "#66CCFF";
+
         var craft = recipe.Craft;
         _tool = craft?.Tool ?? "Hammer";
         _category = craft?.Category ?? "Misc";
@@ -132,6 +140,67 @@ public sealed partial class ItemEditorViewModel : ObservableObject
     [ObservableProperty] private Bitmap? _iconImage;
     [ObservableProperty] private string _scripts = "";
 
+    // Fire & lights (every Light and particle effect on the base)
+    [ObservableProperty] private bool _hasEffects;
+    [ObservableProperty] private string _effectsSummary = "";
+    [ObservableProperty] private bool _lightColorOn;
+    [ObservableProperty] private string _lightColor;
+    [ObservableProperty] private double _lightIntensity;
+    [ObservableProperty] private double _lightRange;
+    [ObservableProperty] private bool _flameTintOn;
+    [ObservableProperty] private string _flameTint;
+    [ObservableProperty] private bool _hasLights;
+    [ObservableProperty] private bool _hasParticles;
+    public string LightIntensityText => $"× {LightIntensity:0.##}";
+    public string LightRangeText => $"× {LightRange:0.##}";
+
+    partial void OnLightColorOnChanged(bool value) => ScheduleSave();
+    partial void OnLightColorChanged(string value) => ScheduleSave();
+    partial void OnFlameTintOnChanged(bool value) => ScheduleSave();
+    partial void OnFlameTintChanged(string value) => ScheduleSave();
+
+    partial void OnLightIntensityChanged(double value)
+    {
+        OnPropertyChanged(nameof(LightIntensityText));
+        ScheduleSave();
+    }
+
+    partial void OnLightRangeChanged(double value)
+    {
+        OnPropertyChanged(nameof(LightRangeText));
+        ScheduleSave();
+    }
+
+    [RelayCommand]
+    private void ResetEffects()
+    {
+        LightColorOn = false;
+        LightIntensity = 1;
+        LightRange = 1;
+        FlameTintOn = false;
+    }
+
+    private void DescribeEffects(PrefabInfo info)
+    {
+        HasLights = info.Lights.Count > 0;
+        HasParticles = info.Particles.Count > 0;
+        HasEffects = HasLights || HasParticles;
+        var parts = new List<string>();
+        if (HasLights)
+            parts.Add($"{info.Lights.Count} light{(info.Lights.Count == 1 ? "" : "s")}");
+        if (HasParticles)
+            parts.Add($"{info.Particles.Count} particle effect{(info.Particles.Count == 1 ? "" : "s")} (flames, sparks, smoke)");
+        EffectsSummary = $"The base has {string.Join(" and ", parts)}.";
+        if (Recipe.Effects?.LightColor == null && info.Lights.FirstOrDefault() is { } light)
+        {
+            static int B(float f) => (int)Math.Clamp(Math.Round(f * 255), 0, 255);
+            var was = _loading;
+            _loading = true;
+            LightColor = $"#{B(light.Color[0]):X2}{B(light.Color[1]):X2}{B(light.Color[2]):X2}";
+            _loading = was;
+        }
+    }
+
     // Components
     public ComponentsPanel Components { get; }
     [ObservableProperty] private bool _glowOn;
@@ -177,7 +246,9 @@ public sealed partial class ItemEditorViewModel : ObservableObject
         }
 
         Scripts = string.Join(" · ", _base.Info.Scripts);
-        Components.Build(_base.Info, Recipe.Fields);
+        DescribeEffects(_base.Info);
+        _ = Components.BuildAsync(_base.Info, Recipe.Fields, Recipe.RemoveComponents, Recipe.AddComponents.Select(a => a.Type),
+            Vanilla == null ? null : Vanilla.ComponentDefaultsAsync, Vanilla == null ? null : Vanilla.ValheimScriptsAsync);
         BaseSnapText = _base.Info.SnapPoints.Count == 0
             ? "The base has no snap points."
             : $"The base has {_base.Info.SnapPoints.Count}: {string.Join("  ", _base.Info.SnapPoints.Select(p => $"({p.X:0.##}, {p.Y:0.##}, {p.Z:0.##})"))}";
@@ -403,6 +474,17 @@ public sealed partial class ItemEditorViewModel : ObservableObject
         Recipe.Look.Materials = Materials.Select(m => m.ToOverride()).Where(o => o != null).Select(o => o!).ToList();
 
         Recipe.Fields = Components.Collect();
+        Recipe.RemoveComponents = Components.RemovedNames.ToList();
+        Recipe.AddComponents = Components.AddedNames.Select(n => new ComponentAdd { Type = n }).ToList();
+
+        var fx = new EffectsRecipe
+        {
+            LightColor = LightColorOn && RecipeSerializer.TryParseColor(LightColor, out _) ? LightColor : null,
+            LightIntensity = Math.Abs(LightIntensity - 1) > 0.005 ? (float)Math.Round(LightIntensity, 2) : null,
+            LightRange = Math.Abs(LightRange - 1) > 0.005 ? (float)Math.Round(LightRange, 2) : null,
+            FlameTint = FlameTintOn && RecipeSerializer.TryParseColor(FlameTint, out _) ? FlameTint : null
+        };
+        Recipe.Effects = fx.IsEmpty ? null : fx;
 
         Recipe.Behaviours.RemoveAll(b => b.Type.Equals("glow", StringComparison.OrdinalIgnoreCase));
         if (GlowOn)

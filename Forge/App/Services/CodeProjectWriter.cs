@@ -101,7 +101,7 @@ public static class CodeProjectWriter
         }
         else
         {
-            WriteOnce(result, Path.Combine(folder, name + ".csproj"), Csproj(name, ns, author, pack.Manifest.Version));
+            WriteOnce(result, Path.Combine(folder, name + ".csproj"), Csproj(name, ns, author, pack.Manifest.Version, "Pack"));
             WriteOnce(result, Path.Combine(folder, name + "Plugin.cs"), Plugin(name, ns, author, pack.Manifest.Version));
             WriteOnce(result, Path.Combine(folder, "environment.props"), EnvironmentProps(valheimPath, deployTo));
             WriteOnce(result, Path.Combine(folder, ".gitignore"), "bin/\nobj/\nenvironment.props\n*.user\n");
@@ -201,9 +201,9 @@ public static class CodeProjectWriter
         }
         """;
 
-    private static string Csproj(string name, string ns, string author, string version) => $$"""
+    internal static string Csproj(string name, string ns, string author, string version, string data = "Pack") => $$"""
         <Project Sdk="Microsoft.NET.Sdk">
-          <!-- Created by Drakes Asset Forge. Forge\ and Pack\ are regenerated on export; everything else is yours. -->
+          <!-- Created by Drakes Asset Forge. Forge\ (if any) and {{data}}\ are regenerated on export; everything else is yours. -->
           <PropertyGroup>
             <TargetFramework>net481</TargetFramework>
             <AssemblyName>{{name}}</AssemblyName>
@@ -233,12 +233,14 @@ public static class CodeProjectWriter
             <Reference Include="UnityEngine.CoreModule" HintPath="$(ManagedPath)\UnityEngine.CoreModule.dll" Private="false" />
             <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(ManagedPath)\UnityEngine.ImageConversionModule.dll" Private="false" />
             <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(ManagedPath)\UnityEngine.AssetBundleModule.dll" Private="false" />
+            <Reference Include="UnityEngine.ParticleSystemModule" HintPath="$(ManagedPath)\UnityEngine.ParticleSystemModule.dll" Private="false" />
+            <Reference Include="UnityEngine.PhysicsModule" HintPath="$(ManagedPath)\UnityEngine.PhysicsModule.dll" Private="false" />
             <!-- Unity 6 modules target netstandard 2.1; net481 only has the 2.0 facade. -->
             <Reference Include="netstandard" HintPath="$(ManagedPath)\netstandard.dll" Private="false" />
           </ItemGroup>
 
           <ItemGroup>
-            <None Include="Pack\**\*" CopyToOutputDirectory="PreserveNewest" />
+            <None Include="{{data}}\**\*" CopyToOutputDirectory="PreserveNewest" />
             <ThunderstoreFile Include="manifest.json" Condition="Exists('manifest.json')" />
             <ThunderstoreFile Include="README.md" Condition="Exists('README.md')" />
             <ThunderstoreFile Include="CHANGELOG.md" Condition="Exists('CHANGELOG.md')" />
@@ -248,13 +250,13 @@ public static class CodeProjectWriter
           <!-- Build installs into the test profile, laid out like a Thunderstore install (hot reload works). -->
           <Target Name="DeployToProfile" AfterTargets="Build" Condition="'$(ForgeDeploy)' != 'false' and '$(ProfilePath)' != '' and Exists('$(BepInExPath)\plugins')">
             <ItemGroup>
-              <ForgePackFiles Include="$(TargetDir)Pack\**\*" />
+              <ForgePackFiles Include="$(TargetDir){{data}}\**\*" />
             </ItemGroup>
             <PropertyGroup>
               <DeployDir>$(BepInExPath)\plugins\$(ThunderstoreAuthor)-$(AssemblyName)</DeployDir>
             </PropertyGroup>
             <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(DeployDir)" SkipUnchangedFiles="true" />
-            <Copy SourceFiles="@(ForgePackFiles)" DestinationFiles="@(ForgePackFiles->'$(DeployDir)\Pack\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+            <Copy SourceFiles="@(ForgePackFiles)" DestinationFiles="@(ForgePackFiles->'$(DeployDir)\{{data}}\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
             <Message Importance="high" Text="Deployed $(AssemblyName) to $(DeployDir)" />
           </Target>
 
@@ -265,11 +267,11 @@ public static class CodeProjectWriter
               <ZipPath>$(MSBuildProjectDirectory)\bin\$(ThunderstoreAuthor)-$(AssemblyName)-$(Version).zip</ZipPath>
             </PropertyGroup>
             <ItemGroup>
-              <StageFiles Include="$(TargetDir)Pack\**\*" />
+              <StageFiles Include="$(TargetDir){{data}}\**\*" />
             </ItemGroup>
             <RemoveDir Directories="$(StageDir)" />
             <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(StageDir)" />
-            <Copy SourceFiles="@(StageFiles)" DestinationFiles="@(StageFiles->'$(StageDir)Pack\%(RecursiveDir)%(Filename)%(Extension)')" />
+            <Copy SourceFiles="@(StageFiles)" DestinationFiles="@(StageFiles->'$(StageDir){{data}}\%(RecursiveDir)%(Filename)%(Extension)')" />
             <Copy SourceFiles="@(ThunderstoreFile)" DestinationFolder="$(StageDir)" />
             <ZipDirectory SourceDirectory="$(StageDir)" DestinationFile="$(ZipPath)" Overwrite="true" />
             <Message Importance="high" Text="Thunderstore zip: $(ZipPath)" />
@@ -277,7 +279,7 @@ public static class CodeProjectWriter
         </Project>
         """;
 
-    private static string EnvironmentProps(string? valheimPath, PushTarget? deployTo)
+    internal static string EnvironmentProps(string? valheimPath, PushTarget? deployTo)
     {
         var profile = deployTo is { IsDevFolder: false } t ? Path.GetFullPath(Path.Combine(t.Folder, "..", "..")) : "";
         return $"""
@@ -316,19 +318,20 @@ public static class CodeProjectWriter
 
         3. References Forge needs (most mods have them): BepInEx, Jotunn, assembly_valheim (publicized),
            UnityEngine, UnityEngine.CoreModule, UnityEngine.ImageConversionModule, UnityEngine.AssetBundleModule,
+           UnityEngine.ParticleSystemModule,
            and Valheim's `netstandard.dll` from valheim_Data\Managed.
 
         Ship the `Pack` folder next to `{{name}}`'s DLL. No Forge Runtime dependency is needed.
         """;
 
-    private static void Write(CodeExportResult result, string path, string text)
+    internal static void Write(CodeExportResult result, string path, string text)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, text.Replace("\r\n", "\n").Replace("\n", Environment.NewLine));
         result.Written.Add(path);
     }
 
-    private static void WriteOnce(CodeExportResult result, string path, string text)
+    internal static void WriteOnce(CodeExportResult result, string path, string text)
     {
         if (File.Exists(path))
         {
@@ -339,7 +342,7 @@ public static class CodeProjectWriter
         Write(result, path, text);
     }
 
-    private static void CopyIfExists(PackProject pack, string file, string folder, CodeExportResult result)
+    internal static void CopyIfExists(PackProject pack, string file, string folder, CodeExportResult result)
     {
         var from = Path.Combine(pack.Root, file);
         if (!File.Exists(from))
@@ -348,13 +351,13 @@ public static class CodeProjectWriter
         result.Written.Add(Path.Combine(folder, file));
     }
 
-    private static string? ReadPackFile(PackProject pack, string file)
+    internal static string? ReadPackFile(PackProject pack, string file)
     {
         var path = Path.Combine(pack.Root, file);
         return File.Exists(path) ? File.ReadAllText(path) : null;
     }
 
-    private static string? ReadNamespace(string folder)
+    internal static string? ReadNamespace(string folder)
     {
         foreach (var file in Directory.EnumerateFiles(folder, "*.cs", SearchOption.TopDirectoryOnly))
             if (Regex.Match(File.ReadAllText(file), @"^\s*namespace\s+([A-Za-z_][\w.]*)", RegexOptions.Multiline) is { Success: true } m)
@@ -363,7 +366,7 @@ public static class CodeProjectWriter
     }
 
     /// <summary>"Cape Wolf Black" → CapeWolfBlack; unique within the export.</summary>
-    private static string TypeName(string text, HashSet<string> used)
+    internal static string TypeName(string text, HashSet<string> used)
     {
         var words = Regex.Split(text, "[^A-Za-z0-9]+").Where(w => w.Length > 0).Select(w => char.ToUpperInvariant(w[0]) + w[1..]);
         var name = string.Concat(words);
@@ -375,7 +378,7 @@ public static class CodeProjectWriter
         return unique;
     }
 
-    private static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    internal static string Escape(string s) => s.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }
 
 /// <summary>Thunderstore metadata kept in the pack folder (README.md, CHANGELOG.md, icon.png) and the generated manifest.</summary>

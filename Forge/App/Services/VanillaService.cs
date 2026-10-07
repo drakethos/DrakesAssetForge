@@ -121,6 +121,33 @@ public sealed class VanillaService : IDisposable
         return tcs.Task;
     }
 
+    /// <summary>Scripts, fields and materials of a prefab, without decoding its model (null if it isn't in this install).</summary>
+    public Task<PrefabInfo?> InspectAsync(string prefabName) =>
+        Catalog.ByName.TryGetValue(prefabName, out var entry) ? OnWorker<PrefabInfo?>(() => PrefabReader.Inspect(_session, entry)) : Task.FromResult<PrefabInfo?>(null);
+
+    /// <summary>Every Valheim script that can be added to a prefab.</summary>
+    public Task<IReadOnlyList<string>> ValheimScriptsAsync() => OnWorker(() => ComponentCatalog.ValheimScripts(_session));
+
+    /// <summary>Settings (with the game's own defaults) of a component that isn't on the prefab yet.</summary>
+    public Task<IReadOnlyList<FieldNode>> ComponentDefaultsAsync(string type) => OnWorker(() => ComponentCatalog.Defaults(_session, type));
+
+    private Task<T> OnWorker<T>(Func<T> work)
+    {
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Enqueue(_high, () =>
+        {
+            try
+            {
+                tcs.SetResult(work());
+            }
+            catch (Exception ex)
+            {
+                tcs.SetException(ex);
+            }
+        });
+        return tcs.Task;
+    }
+
     public Task<VanillaPreview>? TryLoadPreviewAsync(string prefabName) =>
         Catalog.ByName.TryGetValue(prefabName, out var entry) ? LoadPreviewAsync(entry) : null;
 

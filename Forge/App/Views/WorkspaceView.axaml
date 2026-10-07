@@ -7,6 +7,37 @@
              x:DataType="vm:WorkspaceViewModel">
 
     <UserControl.DataTemplates>
+        <!-- A script on the prefab: like a group, plus Remove with an inline "are you sure?". -->
+        <DataTemplate DataType="vm:ComponentCard">
+            <StackPanel Margin="0,0,0,6">
+                <Expander IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch" Padding="10,4,4,6">
+                    <Expander.Header>
+                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                            <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Subtitle}" Classes="mono" VerticalAlignment="Center" />
+                            <Border Grid.Column="2" Classes="tag mine" IsVisible="{Binding HasChanges}"><TextBlock Text="{Binding ChangedText}" /></Border>
+                            <Button Grid.Column="3" Classes="small ghost" Padding="6,1" Content="Remove…" Command="{Binding AskRemoveCommand}"
+                                    ToolTip.Tip="Take this script off the prefab" />
+                        </Grid>
+                    </Expander.Header>
+                    <StackPanel>
+                        <TextBlock Text="No settings to edit." Classes="muted" Margin="2,4" IsVisible="{Binding HasNoSettings}" />
+                        <ItemsControl ItemsSource="{Binding Children}" />
+                    </StackPanel>
+                </Expander>
+                <Border IsVisible="{Binding IsConfirming}" Background="#2A1B14" BorderBrush="#C04A3A" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,4,0,0">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="Are you sure?" FontWeight="SemiBold" Foreground="{StaticResource WarnBrush}" />
+                        <TextBlock Text="{Binding RemoveWarning}" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Classes="small" Background="#8E3527" Content="{Binding ConfirmText}" Command="{Binding ConfirmRemoveCommand}" />
+                            <Button Classes="small ghost" Content="Keep it" Command="{Binding CancelRemoveCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </DataTemplate>
+
         <!-- A group of settings: collapsible, shows how many were changed. Children use these same templates. -->
         <DataTemplate DataType="vm:FieldGroup">
             <Expander IsExpanded="{Binding IsExpanded}" Margin="0,0,0,6" HorizontalAlignment="Stretch" Padding="10,4,4,6">
@@ -205,7 +236,11 @@
                                           ToolTip.Tip="Also show lists and references to other assets (read-only for now)" />
                             <Button Grid.Column="3" Classes="small ghost" Content="Reset all" Command="{Binding ResetAllCommand}" />
                         </Grid>
-                        <TextBlock Text="{Binding Summary}" Classes="muted" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                            <TextBlock Text="{Binding Summary}" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            <Button Grid.Column="1" Classes="small primary" Content="+ Add component" Command="{Binding OpenAddCommand}"
+                                    ToolTip.Tip="Rigidbody, colliders, lights or any Valheim script (Container, Door, Vagon…)" />
+                        </Grid>
                     </StackPanel>
                 </Border>
 
@@ -222,6 +257,35 @@
                                         <Button Grid.Column="2" Classes="small ghost" Content="Clear" Command="{Binding ClearMeshCommand}" IsVisible="{Binding HasMeshSwap}" />
                                     </Grid>
                                     <TextBlock Classes="muted" Text="Keep the base's shape, or show another Valheim prefab's mesh instead." />
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="section" IsVisible="{Binding HasEffects}">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="FIRE &amp; LIGHTS" Classes="h" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="small ghost" Content="Vanilla" Command="{Binding ResetEffectsCommand}" />
+                                    </Grid>
+                                    <TextBlock Text="{Binding EffectsSummary}" Classes="muted" TextWrapping="Wrap" />
+                                    <Grid ColumnDefinitions="110,*,52" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="6">
+                                        <CheckBox Content="Light color" IsChecked="{Binding LightColorOn}" IsVisible="{Binding HasLights}" />
+                                        <Grid Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*" ColumnSpacing="6" IsEnabled="{Binding LightColorOn}" IsVisible="{Binding HasLights}">
+                                            <views:ColorButton Hex="{Binding LightColor}" />
+                                            <TextBox Grid.Column="1" Text="{Binding LightColor}" FontFamily="{StaticResource MonoFont}" />
+                                        </Grid>
+                                        <TextBlock Grid.Row="1" Text="Brightness" Classes="muted" VerticalAlignment="Center" IsVisible="{Binding HasLights}" />
+                                        <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="3" Value="{Binding LightIntensity}" IsVisible="{Binding HasLights}" />
+                                        <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding LightIntensityText}" Classes="mono" VerticalAlignment="Center" IsVisible="{Binding HasLights}" />
+                                        <TextBlock Grid.Row="2" Text="Reach" Classes="muted" VerticalAlignment="Center" IsVisible="{Binding HasLights}" />
+                                        <Slider Grid.Row="2" Grid.Column="1" Minimum="0.25" Maximum="3" Value="{Binding LightRange}" IsVisible="{Binding HasLights}" />
+                                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding LightRangeText}" Classes="mono" VerticalAlignment="Center" IsVisible="{Binding HasLights}" />
+                                        <CheckBox Grid.Row="3" Content="Flame color" IsChecked="{Binding FlameTintOn}" IsVisible="{Binding HasParticles}" />
+                                        <Grid Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*" ColumnSpacing="6" IsEnabled="{Binding FlameTintOn}" IsVisible="{Binding HasParticles}">
+                                            <views:ColorButton Hex="{Binding FlameTint}" />
+                                            <TextBox Grid.Column="1" Text="{Binding FlameTint}" FontFamily="{StaticResource MonoFont}" />
+                                        </Grid>
+                                    </Grid>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="Applies in game (the preview doesn't draw fire). Glowing embers and runes are materials: change their emission in the material list below." />
                                 </StackPanel>
                             </Border>
 
@@ -294,6 +358,19 @@
                                         <CheckBox Grid.Row="2" Content="Metallic" IsChecked="{Binding MetallicOn}" IsVisible="{Binding HasMetallic}" />
                                         <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Metallic}" IsEnabled="{Binding MetallicOn}" IsVisible="{Binding HasMetallic}" />
 
+                                        <CheckBox Grid.Row="3" Content="Glow" IsChecked="{Binding EmissionOn}" IsVisible="{Binding HasEmission}" VerticalAlignment="Top"
+                                                  ToolTip.Tip="Emission: the colour this material glows (ward runes, embers)" />
+                                        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="4" IsEnabled="{Binding EmissionOn}" IsVisible="{Binding HasEmission}">
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                                <views:ColorButton Hex="{Binding EmissionColor}" />
+                                                <TextBox Grid.Column="1" Text="{Binding EmissionColor}" FontFamily="{StaticResource MonoFont}" />
+                                            </Grid>
+                                            <Grid ColumnDefinitions="*,48" ColumnSpacing="6">
+                                                <Slider Minimum="0" Maximum="8" Value="{Binding EmissionStrength}" ToolTip.Tip="Strength: above 1 is brighter than any colour can be" />
+                                                <TextBlock Grid.Column="1" Text="{Binding EmissionStrengthText}" Classes="mono" VerticalAlignment="Center" />
+                                            </Grid>
+                                            <TextBlock Text="{Binding VanillaEmissionText}" Classes="mono" FontSize="10.5" />
+                                        </StackPanel>
 
                                     </Grid>
 
@@ -348,6 +425,46 @@
 
                         <!-- COMPONENTS -->
                         <StackPanel IsVisible="{Binding $parent[DockPanel].((vm:ItemEditorViewModel)DataContext).TabComponents}" Margin="12,8,12,12" DataContext="{Binding Components}" x:DataType="vm:ComponentsPanel">
+                            <!-- Add component: common ones first, then search every Valheim script -->
+                            <Border Classes="card" Padding="12" Margin="0,0,0,10" IsVisible="{Binding IsAdding}" BorderBrush="{StaticResource EmberBrush}">
+                                <StackPanel Spacing="8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="ADD COMPONENT" Classes="h" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="small ghost" Content="Close" Command="{Binding CloseAddCommand}" />
+                                    </Grid>
+                                    <TextBox Text="{Binding AddSearch}" PlaceholderText="Search every Valheim script: Container, Door, Ladder, Beehive…" />
+                                    <ItemsControl ItemsSource="{Binding AddResults}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:AddOption">
+                                                <Button Command="{Binding AddCommand}" Classes="ghost" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="8,5" Margin="0,1">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding Hint}" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                        <Border Grid.Column="2" Classes="tag"><TextBlock Text="{Binding Kind}" /></Border>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="Added scripts start with the game's own defaults. Links to other assets (effects, prefabs) can't be set here, so complex scripts may need code." />
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="card" Padding="12,8" Margin="0,0,0,10" IsVisible="{Binding HasRemoved}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="REMOVED FROM THE BASE" Classes="h" />
+                                    <ItemsControl ItemsSource="{Binding Removed}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:RemovedComponent">
+                                                <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                                    <TextBlock Text="{Binding Name}" TextDecorations="Strikethrough" Classes="muted" VerticalAlignment="Center" />
+                                                    <Button Grid.Column="1" Classes="small ghost" Content="Undo" Command="{Binding UndoCommand}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
                             <ItemsControl ItemsSource="{Binding Components}" IsVisible="{Binding !IsFiltering}" />
                             <ItemsControl ItemsSource="{Binding Results}" IsVisible="{Binding IsFiltering}">
                                 <ItemsControl.ItemTemplate>

@@ -259,7 +259,15 @@ internal static class LookApplier
     private static void SetColor(Material material, string property, float[] rgba, List<string> warnings)
     {
         if (material.HasProperty(property))
+        {
             material.SetColor(property, new Color(rgba[0], rgba[1], rgba[2], rgba[3]));
+            // Emission only shows when the shader keyword is on (vanilla materials without glow have it off).
+            if (property == "_EmissionColor")
+            {
+                material.EnableKeyword("_EMISSION");
+                material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            }
+        }
         else
             warnings.Add($"shader {material.shader.name} has no color {property}");
     }

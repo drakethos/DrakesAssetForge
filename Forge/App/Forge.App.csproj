@@ -15,6 +15,8 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\assetforge.ico" />
+    <!-- Helper source for the plain C# export (a template, not compiled here). -->
+    <EmbeddedResource Include="Lite\ForgeLite.template" LogicalName="ForgeLite.template" />
   </ItemGroup>
 
   <ItemGroup>

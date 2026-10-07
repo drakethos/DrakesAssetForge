@@ -15,6 +15,15 @@ if (args.Length > 1 && args[0] == "diag")
 }
 
 using var session = new AssetSession(catalog);
+if (args.Length > 1 && args[0] == "addable")
+{
+    var scripts = ComponentCatalog.ValheimScripts(session);
+    Console.WriteLine($"{scripts.Count} Valheim scripts, e.g. {string.Join(", ", scripts.Where(s => s is "Piece" or "ItemDrop" or "Vagon" or "Fireplace" or "PrivateArea"))}");
+    foreach (var f in ComponentCatalog.Defaults(session, args[1]))
+        Console.WriteLine($"  {f.Label} [{f.Kind}:{f.TypeName}] {(f.Value is float[] a ? string.Join(",", a) : f.Value)}{(f.Kind == FieldKind.Group ? $" ({f.Children.Count})" : "")}");
+    return;
+}
+
 foreach (var name in args.Length > 0 ? args : new[] { "iron_grate", "SwordBronze" })
 {
     if (!catalog.ByName.TryGetValue(name, out var entry))
@@ -63,6 +72,12 @@ foreach (var name in args.Length > 0 ? args : new[] { "iron_grate", "SwordBronze
         Console.WriteLine($"  ARMOR MATERIAL {am.Name} shader={am.Shader} textures: {string.Join(", ", am.Textures.Select(t => $"{t.Key}={t.Value}"))}");
         Console.WriteLine($"    floats: {string.Join(" ", am.Floats.Select(f => $"{f.Key}={f.Value:0.##}"))}");
     }
+    foreach (var l in info.Lights)
+        Console.WriteLine($"  light {l.Path} color={string.Join(",", l.Color.Select(c => c.ToString("0.##")))} intensity={l.Intensity:0.##} range={l.Range:0.#}");
+    if (info.Particles.Count > 0)
+        Console.WriteLine($"  particles: {info.Particles.Count} ({string.Join(", ", info.Particles.Take(4).Select(p => p.Path))}…)");
+    foreach (var m in info.MaterialSlots.Where(m => m.Colors.ContainsKey("_EmissionColor")).DistinctBy(m => m.Name))
+        Console.WriteLine($"  emission on {m.Name}: {string.Join(",", m.Colors["_EmissionColor"].Select(c => c.ToString("0.##")))}");
     if (info.PieceCost is { } cost)
         Console.WriteLine($"  cost: {cost.Category} @ {cost.Station ?? "no station"}: {string.Join(", ", cost.Resources.Select(r => $"{r.Item} x{r.Amount}{(r.Recover ? "" : " (no refund)")}"))}");
     if (info.SnapPoints.Count > 0)

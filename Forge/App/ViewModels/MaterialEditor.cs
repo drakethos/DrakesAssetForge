@@ -107,6 +107,9 @@ public sealed partial class MaterialEditor : ObservableObject
         OriginalAlbedo = originalAlbedo;
         Slots = slots;
 
+        if (original?.Colors.GetValueOrDefault("_EmissionColor") is { } emission)
+            (_emissionColor, _emissionStrength) = SplitEmission(emission);
+
         if (original != null)
         {
             foreach (var slot in original.TextureSlots.Distinct().OrderBy(SlotOrder))
@@ -139,6 +142,35 @@ public sealed partial class MaterialEditor : ObservableObject
     public bool HasMetallic => IsAll || Original?.Floats.ContainsKey("_Metallic") == true;
     public bool CanTint => !IsArmor;
 
+    // Emission: a hue plus a strength, since glow is HDR (ward runes run at ~2) and a hex colour stops at 1.
+    public bool HasEmission => IsAll || Original?.Colors.ContainsKey("_EmissionColor") == true;
+    [ObservableProperty] private bool _emissionOn;
+    [ObservableProperty] private string _emissionColor = "#FFFFFF";
+    [ObservableProperty] private double _emissionStrength = 1;
+    public string EmissionStrengthText => $"× {EmissionStrength:0.##}";
+    public string VanillaEmissionText => Original?.Colors.GetValueOrDefault("_EmissionColor") is { } c
+        ? $"vanilla: {SplitEmission(c).Hex} × {SplitEmission(c).Strength:0.##}"
+        : "";
+
+    partial void OnEmissionOnChanged(bool value) => Changed();
+    partial void OnEmissionColorChanged(string value) => Changed();
+
+    partial void OnEmissionStrengthChanged(double value)
+    {
+        OnPropertyChanged(nameof(EmissionStrengthText));
+        Changed();
+    }
+
+    /// <summary>HDR colour → brightest channel normalised to 1, and that channel's value as the strength.</summary>
+    private static (string Hex, double Strength) SplitEmission(float[] c)
+    {
+        var max = Math.Max(c[0], Math.Max(c[1], c[2]));
+        if (max <= 0)
+            return ("#000000", 0);
+        static int B(float f) => (int)Math.Clamp(Math.Round(f * 255), 0, 255);
+        return ($"#{B(c[0] / max):X2}{B(c[1] / max):X2}{B(c[2] / max):X2}", Math.Round(max, 2));
+    }
+
     public ObservableCollection<TextureSlotEditor> TextureSlots { get; } = new();
 
     [ObservableProperty] private string _borrowFrom = "";
@@ -158,7 +190,7 @@ public sealed partial class MaterialEditor : ObservableObject
     private TextureSlotEditor? MainSlot => TextureSlots.FirstOrDefault(t => t.Slot == "_MainTex");
     public RgbaImage? CustomAlbedo => MainSlot?.CustomImage;
 
-    public bool IsModified => BorrowFrom.Length > 0 || TintOn || GlossOn || MetallicOn || Shader != null || TextureSlots.Any(t => t.IsCustom);
+    public bool IsModified => BorrowFrom.Length > 0 || TintOn || GlossOn || MetallicOn || EmissionOn || Shader != null || TextureSlots.Any(t => t.IsCustom);
 
     public IBrush Swatch
     {
@@ -192,6 +224,9 @@ public sealed partial class MaterialEditor : ObservableObject
             MetallicOn = o.Floats.TryGetValue("_Metallic", out var m);
             Metallic = MetallicOn ? m : 0.5;
             Shader = o.Shader;
+            EmissionOn = o.Colors.TryGetValue("_EmissionColor", out var glow) && RecipeSerializer.TryParseColor(glow, out _);
+            if (EmissionOn && RecipeSerializer.TryParseColor(glow, out var hdr))
+                (EmissionColor, EmissionStrength) = SplitEmission(hdr);
             foreach (var t in o.Textures)
             {
                 var editor = TextureSlots.FirstOrDefault(s => s.Slot == t.Key);
@@ -228,6 +263,10 @@ public sealed partial class MaterialEditor : ObservableObject
             o.Floats["_Glossiness"] = (float)Math.Round(Gloss, 2);
         if (MetallicOn)
             o.Floats["_Metallic"] = (float)Math.Round(Metallic, 2);
+        if (EmissionOn && RecipeSerializer.TryParseColor(EmissionColor, out _))
+            o.Colors["_EmissionColor"] = Math.Abs(EmissionStrength - 1) < 0.005
+                ? EmissionColor
+                : EmissionColor + "*" + Math.Round(EmissionStrength, 2).ToString(System.Globalization.CultureInfo.InvariantCulture);
         foreach (var t in TextureSlots.Where(t => t.IsCustom))
             o.Textures[t.Slot] = t.CustomFile;
         return o;

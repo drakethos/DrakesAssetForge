@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Globalization;
 using DrakesForge.Format.Json;
 
@@ -114,6 +115,32 @@ public static class RecipeSerializer
         if (root["snap"] is { IsObject: true } snap)
             recipe.Snap = ReadSnap(snap, problems);
 
+        if (root["components"] is { IsObject: true } components)
+        {
+            foreach (var r in components["remove"]?.Items ?? Array.Empty<JsonValue>())
+                if (r.AsString() is { Length: > 0 } name)
+                    recipe.RemoveComponents.Add(name);
+            foreach (var a in components["add"]?.Items ?? Array.Empty<JsonValue>())
+            {
+                var type = a.AsString() ?? (a.IsObject ? Str(a, "type") : null);
+                if (string.IsNullOrWhiteSpace(type))
+                    problems.Add("components.add entries need a \"type\".");
+                else
+                    recipe.AddComponents.Add(new ComponentAdd { Type = type! });
+            }
+        }
+
+        if (root["effects"] is { IsObject: true } effects)
+        {
+            recipe.Effects = new EffectsRecipe
+            {
+                LightColor = Str(effects, "lightColor"),
+                LightIntensity = effects["lightIntensity"]?.AsNumber() is { } li ? (float)li : null,
+                LightRange = effects["lightRange"]?.AsNumber() is { } lr ? (float)lr : null,
+                FlameTint = Str(effects, "flameTint")
+            };
+        }
+
         Validate(recipe, problems);
         return recipe;
     }
@@ -171,6 +198,40 @@ public static class RecipeSerializer
                 .Set("points", points));
         }
 
+        if (recipe.RemoveComponents.Count > 0 || recipe.AddComponents.Count > 0)
+        {
+            var components = JsonValue.NewObject();
+            if (recipe.RemoveComponents.Count > 0)
+            {
+                var remove = JsonValue.NewArray();
+                foreach (var r in recipe.RemoveComponents)
+                    remove.Add(r);
+                components.Set("remove", remove);
+            }
+
+            if (recipe.AddComponents.Count > 0)
+            {
+                var add = JsonValue.NewArray();
+                foreach (var a in recipe.AddComponents)
+                    add.Add(JsonValue.NewObject().Set("type", a.Type));
+                components.Set("add", add);
+            }
+
+            root.Set("components", components);
+        }
+
+        if (recipe.Effects is { IsEmpty: false } fx)
+        {
+            var effects = JsonValue.NewObject();
+            SetIf(effects, "lightColor", fx.LightColor);
+            if (fx.LightIntensity is { } li)
+                effects.Set("lightIntensity", Tidy(li));
+            if (fx.LightRange is { } lr)
+                effects.Set("lightRange", Tidy(lr));
+            SetIf(effects, "flameTint", fx.FlameTint);
+            root.Set("effects", effects);
+        }
+
         return root.ToJson();
     }
 
@@ -217,17 +278,42 @@ public static class RecipeSerializer
             }
         }
 
+        if (recipe.Effects is { } effects)
+            foreach (var (key, value) in new[] { ("lightColor", effects.LightColor), ("flameTint", effects.FlameTint) })
+                if (value != null && !TryParseColor(value, out _))
+                    problems.Add($"effects.{key} \"{value}\" is not a color.");
+
+        foreach (var removed in recipe.RemoveComponents)
+            if (recipe.AddComponents.Any(a => a.Type == removed))
+                problems.Add($"components: {removed} is both removed and added.");
+
         if (recipe.Snap != null && recipe.Snap.Mode != SnapMode.Keep && recipe.Kind == RecipeKind.Item)
             problems.Add("Snap points only apply to pieces.");
     }
 
     /// <summary>Parses #RGB, #RRGGBB or #RRGGBBAA into 0–1 floats.</summary>
+    /// <summary>
+    /// "#RRGGBB" / "#RRGGBBAA" / "#RGB", optionally "*k" for HDR brightness (emission, glow):
+    /// "#66CCFF*2.5" scales RGB by 2.5 (alpha untouched).
+    /// </summary>
     public static bool TryParseColor(string? raw, out float[] rgba)
     {
         rgba = new[] { 1f, 1f, 1f, 1f };
         if (string.IsNullOrWhiteSpace(raw))
             return false;
-        var hex = raw!.Trim().TrimStart('#');
+        var text = raw!.Trim();
+        var star = text.IndexOf('*');
+        if (star >= 0)
+        {
+            if (!float.TryParse(text.Substring(star + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out var scale) || scale < 0 ||
+                !TryParseColor(text.Substring(0, star), out rgba))
+                return false;
+            for (var i = 0; i < 3; i++)
+                rgba[i] *= scale;
+            return true;
+        }
+
+        var hex = text.TrimStart('#');
         if (hex.Length == 3)
             hex = string.Concat(hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]);
         if (hex.Length != 6 && hex.Length != 8)

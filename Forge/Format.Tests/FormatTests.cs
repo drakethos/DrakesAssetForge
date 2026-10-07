@@ -115,6 +115,7 @@ public class RecipeTests
     [InlineData("#FF8000", 1f, 128 / 255f, 0f, 1f)]
     [InlineData("#f80", 1f, 136 / 255f, 0f, 1f)]
     [InlineData("#00000080", 0f, 0f, 0f, 128 / 255f)]
+    [InlineData("#FF8000*2", 2f, 256 / 255f, 0f, 1f)]
     public void Parses_colors(string raw, float r, float g, float b, float a)
     {
         Assert.True(RecipeSerializer.TryParseColor(raw, out var c));

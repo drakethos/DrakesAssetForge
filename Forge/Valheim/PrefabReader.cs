@@ -49,10 +49,16 @@ public static class PrefabReader
 
             var lowerLods = LowerLodRenderers(nodes);
             var renderers = new List<RendererInfo>();
+            var lights = new List<EffectInfo>();
+            var particles = new List<EffectInfo>();
             foreach (var node in nodes)
                 foreach (var component in node.Components)
+                {
                     if (ReadRenderer(node, component, lowerLods) is { } r)
                         renderers.Add(r);
+                    else if (ReadEffect(node, component) is { } effect)
+                        ((AssetClassID)component.info.TypeId == AssetClassID.Light ? lights : particles).Add(effect);
+                }
 
             var scripts = new List<string>();
             var components = new List<ComponentInfo>();
@@ -80,6 +86,8 @@ public static class PrefabReader
                 Name = rootGo["m_Name"].AsString,
                 Scripts = scripts,
                 Renderers = renderers,
+                Lights = lights,
+                Particles = particles,
                 HasIcon = icon != null,
                 IconSprite = icon,
                 PieceCost = cost,
@@ -229,6 +237,30 @@ public static class PrefabReader
             return lower;
         }
 
+        private static EffectInfo? ReadEffect(Node node, AssetExternal component)
+        {
+            var bf = component.baseField;
+            static float[] Rgba(AssetTypeValueField c) => c.IsDummy
+                ? new[] { 1f, 1f, 1f, 1f }
+                : new[] { c["r"].AsFloat, c["g"].AsFloat, c["b"].AsFloat, c["a"].AsFloat };
+            try
+            {
+                switch ((AssetClassID)component.info.TypeId)
+                {
+                    case AssetClassID.Light:
+                        return new EffectInfo { Path = node.Path, Color = Rgba(bf["m_Color"]), Intensity = bf["m_Intensity"].AsFloat, Range = bf["m_Range"].AsFloat };
+                    case AssetClassID.ParticleSystem:
+                        return new EffectInfo { Path = node.Path, Color = Rgba(bf["InitialModule"]["startColor"]["maxColor"]) };
+                    default:
+                        return null;
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         private RendererInfo? ReadRenderer(Node node, AssetExternal component, HashSet<(string, long)> lowerLods)
         {
             var type = (AssetClassID)component.info.TypeId;
@@ -282,13 +314,15 @@ public static class PrefabReader
             var bf = ext.baseField;
             var props = bf["m_SavedProperties"];
             var color = new[] { 1f, 1f, 1f, 1f };
+            var colors = new Dictionary<string, float[]>();
             foreach (var c in props["m_Colors.Array"].Children)
             {
-                if (c["first"].AsString != "_Color")
-                    continue;
                 var v = c["second"];
-                color = new[] { v["r"].AsFloat, v["g"].AsFloat, v["b"].AsFloat, v["a"].AsFloat };
+                colors[c["first"].AsString] = new[] { v["r"].AsFloat, v["g"].AsFloat, v["b"].AsFloat, v["a"].AsFloat };
             }
+
+            if (colors.TryGetValue("_Color", out var main))
+                color = main;
 
             var floats = new Dictionary<string, float>();
             foreach (var f in props["m_Floats.Array"].Children)
@@ -317,6 +351,7 @@ public static class PrefabReader
                 Shader = ShaderName(ext.file, bf["m_Shader"]),
                 Color = color,
                 Floats = floats,
+                Colors = colors,
                 TextureSlots = slots,
                 Textures = textures,
                 TextureRefs = textureRefs,

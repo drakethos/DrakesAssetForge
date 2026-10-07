@@ -95,13 +95,24 @@
                             </Border>
                         </Button>
                         <Button Background="Transparent" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Command="{Binding SetOutputCommand}" CommandParameter="code">
-                            <Border Classes="option" Classes.on="{Binding OutputCode}">
+                            <Border Classes="option" Classes.on="{Binding OutputForgeCode}">
                                 <StackPanel Spacing="4">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <TextBlock Text="C# mod project" FontWeight="SemiBold" />
                                         <Border Classes="tag" Background="#2A2440"><TextBlock Text="your own DLL" Foreground="#C3B4F2" /></Border>
                                     </StackPanel>
                                     <TextBlock Classes="muted" Text="Forge is compiled into your mod (no Forge Runtime dependency). Each item gets a Customize file for your own code. Re-export any time; your code is kept." />
+                                </StackPanel>
+                            </Border>
+                        </Button>
+                        <Button Background="Transparent" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Command="{Binding SetOutputCommand}" CommandParameter="plain">
+                            <Border Classes="option" Classes.on="{Binding OutputPlain}">
+                                <StackPanel Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="Plain C#" FontWeight="SemiBold" />
+                                        <Border Classes="tag" Background="#3A2914"><TextBlock Text="Jotunn only" Foreground="#F0B27A" /></Border>
+                                    </StackPanel>
+                                    <TextBlock Classes="muted" Text="Each item as readable Jotunn code (typed settings, materials, fire colours) plus one small helper file. No Forge and no pack files, so you can take it from there by hand. Live push and hot reload don't apply." />
                                 </StackPanel>
                             </Border>
                         </Button>

@@ -5,6 +5,13 @@ Two things release from this repo, each with its own version and tag:
 - **Drakes Asset Forge** (the desktop app): tags `app-v*`
 - **Drakes Forge Runtime** (the BepInEx mod packs need): tags `runtime-v*`, changelog in [Forge/Runtime/thunderstore/CHANGELOG.md](Forge/Runtime/thunderstore/CHANGELOG.md)
 
+## App: unreleased
+
+- Fire & lights on the Look tab: light colour, brightness and reach, flame colour, for anything with fire or lights (braziers, wards, torches).
+- Material glow: emission colour plus strength (colours accept `#RRGGBB*k` for HDR).
+- Components: remove any script with an "are you sure?" that says what breaks, undo from the Removed list; add Rigidbody, colliders, lights or any of Valheim's ~380 scripts, starting from the game's own defaults.
+- Publish: **Plain C#** output. Each item becomes readable Jotunn code with typed settings, plus one helper file, with no Forge and no pack files. Also `export-code <pack> <out> --plain`.
+
 ## App 0.1.0
 
 First release of the rewritten app (the earlier Catalog/Project/Export tool lives in `legacy/`).

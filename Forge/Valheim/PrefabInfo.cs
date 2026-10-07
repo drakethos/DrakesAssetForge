@@ -11,6 +11,10 @@ public sealed class PrefabInfo
     /// <summary>Every serialized setting of each root script, with vanilla values.</summary>
     public IReadOnlyList<ComponentInfo> Components { get; init; } = Array.Empty<ComponentInfo>();
     public required IReadOnlyList<RendererInfo> Renderers { get; init; }
+    /// <summary>Lights (fire glow, ward light), in hierarchy order.</summary>
+    public IReadOnlyList<EffectInfo> Lights { get; init; } = Array.Empty<EffectInfo>();
+    /// <summary>Particle effects (flames, sparks, ward bubble).</summary>
+    public IReadOnlyList<EffectInfo> Particles { get; init; } = Array.Empty<EffectInfo>();
     public bool HasIcon { get; init; }
     /// <summary>Build cost of a vanilla piece (null for items: their recipes live in ObjectDB, not the prefab).</summary>
     public PieceCost? PieceCost { get; init; }
@@ -32,6 +36,15 @@ public sealed class PieceCost
     /// <summary>Crafting station prefab name, or null when none is needed.</summary>
     public string? Station { get; init; }
     public required IReadOnlyList<(string Item, int Amount, int PerLevel, bool Recover)> Resources { get; init; }
+}
+
+public sealed class EffectInfo
+{
+    public required string Path { get; init; }
+    /// <summary>Light colour, or a particle system's start colour (0-1 RGBA).</summary>
+    public required float[] Color { get; init; }
+    public float Intensity { get; init; }
+    public float Range { get; init; }
 }
 
 public sealed class RendererInfo
@@ -62,6 +75,8 @@ public sealed class MaterialInfo
     public IReadOnlyList<string> TextureSlots { get; init; } = Array.Empty<string>();
     /// <summary>Texture slot → texture name, for slots that have one.</summary>
     public IReadOnlyDictionary<string, string> Textures { get; init; } = new Dictionary<string, string>();
+    /// <summary>Colour properties and their values (_Color, _EmissionColor…).</summary>
+    public IReadOnlyDictionary<string, float[]> Colors { get; init; } = new Dictionary<string, float[]>();
 
     internal IReadOnlyDictionary<string, AssetRef> TextureRefs { get; init; } = new Dictionary<string, AssetRef>();
 

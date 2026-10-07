@@ -54,6 +54,13 @@ public sealed class ItemRecipe
     public CraftRecipe? Craft { get; set; }
     public SnapRecipe? Snap { get; set; }
 
+    /// <summary>Component type names removed from the root (e.g. PrivateArea for a ward without warding).</summary>
+    public List<string> RemoveComponents { get; set; } = new();
+    /// <summary>Components added to the root (Rigidbody, BoxCollider, any Valheim script…). Set their fields via <see cref="Fields"/>.</summary>
+    public List<ComponentAdd> AddComponents { get; set; } = new();
+    /// <summary>Lights and particle effects (fire, ward glow).</summary>
+    public EffectsRecipe? Effects { get; set; }
+
     /// <summary>File the recipe was read from. Not serialized.</summary>
     public string? SourcePath { get; set; }
 }
@@ -106,6 +113,27 @@ public sealed class MaterialOverride
 }
 
 /// <summary>A Forge-provided component configured from data (glow, …).</summary>
+public sealed class ComponentAdd
+{
+    /// <summary>Type name: a Unity component (Rigidbody, BoxCollider, Light…) or a Valheim script (Container, Vagon…).</summary>
+    public string Type { get; set; } = "";
+}
+
+/// <summary>Every Light and ParticleSystem in the prefab (fire, braziers, ward glow), except Forge's own glow.</summary>
+public sealed class EffectsRecipe
+{
+    /// <summary>#RRGGBB for every light.</summary>
+    public string? LightColor { get; set; }
+    /// <summary>Multiplies each light's intensity.</summary>
+    public float? LightIntensity { get; set; }
+    /// <summary>Multiplies each light's range.</summary>
+    public float? LightRange { get; set; }
+    /// <summary>#RRGGBB recolouring every particle effect (keeps their fade/alpha).</summary>
+    public string? FlameTint { get; set; }
+
+    public bool IsEmpty => LightColor == null && LightIntensity == null && LightRange == null && FlameTint == null;
+}
+
 public sealed class BehaviourRecipe
 {
     public string Type { get; set; } = "";

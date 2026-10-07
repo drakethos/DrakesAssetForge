@@ -223,7 +223,7 @@ internal static class ForgeLite
     private static Material? _spriteTemplate;
 
     /// <summary>
-    /// A flat image: pivot at its bottom centre, facing -Z before rotation, alpha cut out. Two-sided adds a mirrored
+    /// A flat image: pivot at its bottom centre, facing +Z (forward) before rotation, alpha cut out. Two-sided adds a mirrored
     /// back face so text reads correctly from behind.
     /// </summary>
     internal static void AddSprite(GameObject prefab, string file, float width, float height, Vector3 position, Vector3 rotation, bool doubleSided)
@@ -245,15 +245,16 @@ internal static class ForgeLite
 
         var w = width / 2f;
         var vertices = new List<Vector3> { new(-w, 0, 0), new(-w, height, 0), new(w, height, 0), new(w, 0, 0) };
-        var normals = Enumerable.Repeat(Vector3.back, 4).ToList();
-        var uvs = new List<Vector2> { new(0, 0), new(0, 1), new(1, 1), new(1, 0) };
-        var triangles = new List<int> { 0, 1, 2, 0, 2, 3 };
+        // Front faces +Z (the prefab's forward); Unity's front faces wind clockwise.
+        var normals = Enumerable.Repeat(Vector3.forward, 4).ToList();
+        var uvs = new List<Vector2> { new(1, 0), new(1, 1), new(0, 1), new(0, 0) };
+        var triangles = new List<int> { 2, 1, 0, 2, 0, 3 };
         if (doubleSided)
         {
             vertices.AddRange(vertices.ToList());
-            normals.AddRange(Enumerable.Repeat(Vector3.forward, 4));
-            uvs.AddRange(new Vector2[] { new(1, 0), new(1, 1), new(0, 1), new(0, 0) });
-            triangles.AddRange(new[] { 4, 6, 5, 4, 7, 6 });
+            normals.AddRange(Enumerable.Repeat(Vector3.back, 4));
+            uvs.AddRange(new Vector2[] { new(0, 0), new(0, 1), new(1, 1), new(1, 0) });
+            triangles.AddRange(new[] { 4, 5, 6, 4, 6, 7 });
         }
 
         var mesh = new Mesh { name = "forge_sprite" };

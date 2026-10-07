@@ -80,7 +80,7 @@ public sealed class LookRecipe
 }
 
 /// <summary>
-/// A flat image: a quad of <see cref="Width"/> × <see cref="Height"/> metres, pivot at its bottom centre, facing -Z
+/// A flat image: a quad of <see cref="Width"/> × <see cref="Height"/> metres, pivot at its bottom centre, facing +Z (forward)
 /// before <see cref="Rotation"/>. Transparent pixels (alpha below half) are cut out.
 /// </summary>
 public sealed class SpriteRecipe

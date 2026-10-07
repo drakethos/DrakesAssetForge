@@ -19,7 +19,9 @@ install when the game loads, so a pack is a few small text files plus whatever P
   Armour shows as worn, including the textures it paints onto the player's body.
 - **Change anything**: every setting on the base's scripts (ItemDrop, Piece, WearNTear, Door, Container…) with its
   vanilla value, proper controls (dropdowns for enums, toggles, colours), search, and one-click reset. Costs, crafting
-  station, hammer tab, snap points, and a glow light.
+  station, hammer tab, and a glow light.
+- **Snap points**: auto-detected from the model's shape, or drag numbered points in the viewport (lock to an axis or
+  level, stick to edges or a grid), each named by where it sits ("bottom-left corner").
 - **Sprites**: put flat pictures (PNG with transparency) on any item or piece: a banner on a pole, a sign, a poster,
   a note lying on the floor. Size, position, rotation, one or both sides; or hide the base model so the picture is
   the whole look. No 3D modelling needed.
@@ -45,7 +47,7 @@ install when the game loads, so a pack is a few small text files plus whatever P
 | ![Fire and glow colours](docs/screenshots/7-ward-fire.png) | ![Remove a component](docs/screenshots/7b-ward-remove-confirm.png) |
 | ![Added Rigidbody](docs/screenshots/7d-ward-components.png) | ![Plain C# export](docs/screenshots/4c-publish-plain.png) |
 | ![Sprite banner](docs/screenshots/8-sprite-banner.png) | ![Publish](docs/screenshots/4-publish.png) |
-| ![Settings](docs/screenshots/6-settings.png) | |
+| ![Snap tool](docs/screenshots/9-snap-tool.png) | ![Settings](docs/screenshots/6-settings.png) |
 
 ## Get it
 

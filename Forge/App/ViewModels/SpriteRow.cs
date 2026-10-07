@@ -77,9 +77,9 @@ public sealed partial class SpriteRow : ObservableObject
     [RelayCommand]
     private void LieFlat()
     {
-        RotX = 90;
+        RotX = -90;
         Y = 0.01;
-        Z = Math.Round(-Height / 2, 3);
+        Z = Math.Round(Height / 2, 3);
     }
 
     public static SpriteRow From(SpriteRecipe s, RgbaImage? image)
@@ -110,7 +110,7 @@ public sealed partial class SpriteRow : ObservableObject
     };
 
     /// <summary>
-    /// The quad as the runtime builds it (pivot bottom centre, facing -Z, Unity's Z-X-Y rotation order),
+    /// The quad as the runtime builds it (pivot bottom centre, facing +Z, Unity's Z-X-Y rotation order),
     /// converted to the viewport's axes (X mirrored).
     /// </summary>
     public ModelPart ToPart(int slot)
@@ -121,7 +121,7 @@ public sealed partial class SpriteRow : ObservableObject
         var rotation = Matrix4x4.CreateRotationZ((float)RotZ * deg) * Matrix4x4.CreateRotationX((float)RotX * deg) * Matrix4x4.CreateRotationY((float)RotY * deg);
         var offset = new Vector3((float)X, (float)Y, (float)Z);
         var corners = new[] { new Vector3(-w, 0, 0), new Vector3(-w, h, 0), new Vector3(w, h, 0), new Vector3(w, 0, 0) };
-        var normal = Vector3.TransformNormal(new Vector3(0, 0, -1), rotation);
+        var normal = Vector3.TransformNormal(new Vector3(0, 0, 1), rotation);
 
         var positions = new float[12];
         var normals = new float[12];
@@ -141,7 +141,7 @@ public sealed partial class SpriteRow : ObservableObject
             Name = "sprite " + FileName,
             Positions = positions,
             Normals = normals,
-            Uvs = new float[] { 0, 0, 0, 1, 1, 1, 1, 0 },
+            Uvs = new float[] { 1, 0, 1, 1, 0, 1, 0, 0 },
             Indices = new[] { 0, 1, 2, 0, 2, 3 },
             MaterialSlot = slot
         };

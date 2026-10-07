@@ -107,6 +107,26 @@
         <Style Selector="TextBox.error">
             <Setter Property="BorderBrush" Value="#C04A3A" />
         </Style>
+        <!-- Snap point rows: numbered badge matching the viewport, highlighted when selected -->
+        <Style Selector="Border.snaprow">
+            <Setter Property="Background" Value="{StaticResource Panel2Brush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.snaprow.selected">
+            <Setter Property="BorderBrush" Value="{StaticResource EmberBrush}" />
+        </Style>
+        <Style Selector="Button.snapnum">
+            <Setter Property="Width" Value="26" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="13" />
+            <Setter Property="Background" Value="#E8893C" />
+            <Setter Property="Foreground" Value="#121417" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
         <Style Selector="Expander">
             <Setter Property="Background" Value="Transparent" />
         </Style>
@@ -195,9 +215,43 @@
                 <ToggleButton Classes="small" Content="Compare to base" IsChecked="{Binding CompareToBase}" ToolTip.Tip="Show the untouched vanilla prefab" />
                 <Button Classes="small" Content="Render icon from this view" Command="{Binding RenderIconCommand}" CommandParameter="{Binding #Viewport.Camera}" />
             </StackPanel>
-            <TextBlock DockPanel.Dock="Bottom" Margin="14,6" Classes="muted"
-                       Text="Drag to orbit · wheel to zoom · double-click to reset. Approximate shading; Push to game for the real look." />
-            <views:ModelViewport x:Name="Viewport" Parts="{Binding Parts}" Look="{Binding Look}" Markers="{Binding Markers}" Message="{Binding ViewportMessage}" />
+            <!-- Snap point dragging: lock and magnet, only while editing points -->
+            <Border DockPanel.Dock="Top" Margin="12,0,12,6" Padding="10,6" CornerRadius="6" Background="{StaticResource PanelBrush}" IsVisible="{Binding MarkerEditing}">
+                <WrapPanel ItemSpacing="14" LineSpacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="Drag moves" Classes="muted" VerticalAlignment="Center" />
+                        <Border Classes="seg">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton Classes="seg" GroupName="lock" Content="Free" IsChecked="{Binding LockFree, Mode=OneWay}" Command="{Binding SetConstraintCommand}" CommandParameter="free"
+                                             ToolTip.Tip="Across the screen, at the point's depth" />
+                                <RadioButton Classes="seg" GroupName="lock" Content="X" IsChecked="{Binding LockX, Mode=OneWay}" Command="{Binding SetConstraintCommand}" CommandParameter="x"
+                                             ToolTip.Tip="Only left/right (red line)" />
+                                <RadioButton Classes="seg" GroupName="lock" Content="Y" IsChecked="{Binding LockY, Mode=OneWay}" Command="{Binding SetConstraintCommand}" CommandParameter="y"
+                                             ToolTip.Tip="Only up/down (green line)" />
+                                <RadioButton Classes="seg" GroupName="lock" Content="Z" IsChecked="{Binding LockZ, Mode=OneWay}" Command="{Binding SetConstraintCommand}" CommandParameter="z"
+                                             ToolTip.Tip="Only front/back (blue line)" />
+                                <RadioButton Classes="seg" GroupName="lock" Content="Level" IsChecked="{Binding LockFloor, Mode=OneWay}" Command="{Binding SetConstraintCommand}" CommandParameter="floor"
+                                             ToolTip.Tip="Keeps its height; slides over the floor plane (X and Z)" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <CheckBox Content="Stick to edges" IsChecked="{Binding SnapToEdges}" ToolTip.Tip="Sticks to the model's sides, middle and 0 when close" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="Grid" Classes="muted" VerticalAlignment="Center" />
+                        <ComboBox ItemsSource="{x:Static vm:ItemEditorViewModel.GridSteps}" SelectedItem="{Binding SnapGrid}" MinWidth="80">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="x:Double">
+                                    <TextBlock Text="{Binding Converter={x:Static views:Converters.GridStep}}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                </WrapPanel>
+            </Border>
+            <TextBlock DockPanel.Dock="Bottom" Margin="14,6" Classes="muted" TextWrapping="Wrap"
+                       Text="{Binding ViewportHint}" />
+            <views:ModelViewport x:Name="Viewport" Parts="{Binding Parts}" Look="{Binding Look}" Markers="{Binding Markers}" Message="{Binding ViewportMessage}"
+                                 MarkerEditing="{Binding MarkerEditing}" Constraint="{Binding SnapConstraint}" Editor="{Binding}" />
         </DockPanel>
 
         <!-- Inspector -->
@@ -606,38 +660,71 @@
                             <Border Classes="section">
                                 <StackPanel Spacing="8">
                                     <TextBlock Text="SNAP POINTS" Classes="h" />
-                                    <Grid ColumnDefinitions="110,*">
-                                        <TextBlock Text="Mode" Classes="muted" VerticalAlignment="Center" />
-                                        <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:ItemEditorViewModel.SnapModes}" SelectedItem="{Binding SnapMode}" HorizontalAlignment="Stretch" />
-                                    </Grid>
-                                    <TextBlock Classes="muted" Text="keep = the base's points · add = base's plus yours · replace = only yours. Blue dots are the base's, orange are yours." />
-                                    <TextBlock Classes="muted" Text="{Binding BaseSnapText}" />
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <Button Classes="small" Content="Copy base points" Command="{Binding CopyBaseSnapPointsCommand}" />
-                                        <Button Classes="small" Content="+ Add point" Command="{Binding AddSnapPointCommand}" />
-                                    </StackPanel>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="Where other pieces click onto this one when building. Blue dots are the base's, orange numbered ones are yours." />
+                                    <Border Classes="seg" HorizontalAlignment="Left">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton Classes="seg" GroupName="snapMode" Content="Base's points" IsChecked="{Binding SnapKeep, Mode=OneWay}"
+                                                         Command="{Binding SetSnapModeCommand}" CommandParameter="keep" ToolTip.Tip="Keep the base's snap points as they are" />
+                                            <RadioButton Classes="seg" GroupName="snapMode" Content="Base's + mine" IsChecked="{Binding SnapAdd, Mode=OneWay}"
+                                                         Command="{Binding SetSnapModeCommand}" CommandParameter="add" ToolTip.Tip="The base's points plus the ones below" />
+                                            <RadioButton Classes="seg" GroupName="snapMode" Content="Only mine" IsChecked="{Binding SnapReplace, Mode=OneWay}"
+                                                         Command="{Binding SetSnapModeCommand}" CommandParameter="replace" ToolTip.Tip="Only the points below" />
+                                        </StackPanel>
+                                    </Border>
+                                    <TextBlock Classes="muted" Text="{Binding BaseSnapText}" TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
                             <Border Classes="section">
-                                <StackPanel Spacing="4">
-                                    <Grid ColumnDefinitions="*,*,*,Auto" ColumnSpacing="6">
-                                        <TextBlock Text="X" Classes="muted" />
-                                        <TextBlock Grid.Column="1" Text="Y (up)" Classes="muted" />
-                                        <TextBlock Grid.Column="2" Text="Z" Classes="muted" />
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="FROM THE MODEL'S SHAPE" Classes="h" />
+                                    <TextBlock Classes="mono" FontSize="11" Text="{Binding ShapeText}" />
+                                    <Button Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Auto-detect snap points"
+                                            Command="{Binding AutoSnapCommand}" CommandParameter="Detect"
+                                            ToolTip.Tip="Floors and walls: the 4 corners of the big face. Beams and poles: both ends. Anything else: the 8 corners. Replaces your points." />
+                                    <WrapPanel ItemSpacing="6" LineSpacing="6">
+                                        <Button Classes="small" Content="+ Bottom corners" Command="{Binding AutoSnapCommand}" CommandParameter="BottomCorners" />
+                                        <Button Classes="small" Content="+ Top corners" Command="{Binding AutoSnapCommand}" CommandParameter="TopCorners" />
+                                        <Button Classes="small" Content="+ Edge middles" Command="{Binding AutoSnapCommand}" CommandParameter="EdgeMiddles" />
+                                        <Button Classes="small" Content="+ Centre line" Command="{Binding AutoSnapCommand}" CommandParameter="Centre"
+                                                ToolTip.Tip="Bottom centre, middle and top centre" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="section">
+                                <StackPanel Spacing="6">
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                                        <TextBlock Text="YOUR POINTS" Classes="h" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="small" Content="+ Add point" Command="{Binding AddSnapPointCommand}" ToolTip.Tip="Adds one on top of the model; drag it where you want" />
+                                        <Button Grid.Column="2" Classes="small ghost" Content="Copy base's" Command="{Binding CopyBaseSnapPointsCommand}" />
+                                        <Button Grid.Column="3" Classes="small ghost" Content="Clear" Command="{Binding ClearSnapPointsCommand}" IsVisible="{Binding HasSnapPoints}" />
                                     </Grid>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !HasSnapPoints}"
+                                               Text="None yet. Auto-detect, add one, or copy the base's, then drag them in the viewport." />
                                     <ItemsControl ItemsSource="{Binding SnapPoints}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:SnapRow">
-                                                <Grid ColumnDefinitions="*,*,*,Auto" ColumnSpacing="6" Margin="0,0,0,4">
-                                                    <TextBox Text="{Binding X}" />
-                                                    <TextBox Grid.Column="1" Text="{Binding Y}" />
-                                                    <TextBox Grid.Column="2" Text="{Binding Z}" />
-                                                    <Button Grid.Column="3" Classes="small ghost" Content="×" Command="{Binding RemoveCommand}" />
-                                                </Grid>
+                                                <Border Classes="snaprow" Classes.selected="{Binding IsSelected}" Padding="6,4" Margin="0,0,0,4" CornerRadius="6">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="4">
+                                                        <Button Grid.RowSpan="2" Classes="snapnum" Content="{Binding Number}" Command="{Binding SelectCommand}"
+                                                                ToolTip.Tip="Select (highlighted in the viewport)" VerticalAlignment="Top" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                        <Button Grid.Column="2" Classes="small ghost" Content="×" Command="{Binding RemoveCommand}" ToolTip.Tip="Remove this point" />
+                                                        <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto,*,Auto,*" ColumnSpacing="4">
+                                                            <TextBlock Text="X" Foreground="#E0605A" VerticalAlignment="Center" />
+                                                            <TextBox Grid.Column="1" Text="{Binding X}" />
+                                                            <TextBlock Grid.Column="2" Text="Y" Foreground="#7CC48A" VerticalAlignment="Center" />
+                                                            <TextBox Grid.Column="3" Text="{Binding Y}" />
+                                                            <TextBlock Grid.Column="4" Text="Z" Foreground="#6FA8E8" VerticalAlignment="Center" />
+                                                            <TextBox Grid.Column="5" Text="{Binding Z}" />
+                                                        </Grid>
+                                                    </Grid>
+                                                </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                    <TextBlock Classes="muted" Text="Meters, relative to the piece's origin (the point you place it by)." />
+                                    <TextBlock Classes="muted" TextWrapping="Wrap"
+                                               Text="Metres from the piece's origin (where you hold it when placing). Y is up; the compass in the viewport shows front and right." />
                                 </StackPanel>
                             </Border>
                         </StackPanel>

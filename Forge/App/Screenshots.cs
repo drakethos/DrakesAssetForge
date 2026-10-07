@@ -229,6 +229,41 @@ internal static class Screenshots
                 poleEditor.SaveNow();
             }
 
+            // Snap tool on a "paper" piece: floor base hidden, a standing sprite, auto-detected points, one dragged up.
+            var paper = new Format.ItemRecipe { Id = "screens_paper", Base = "wood_floor_1x1", Kind = Format.RecipeKind.Piece, Name = "Paper" };
+            vm.Pack!.SaveRecipe(paper);
+            vm.Workspace.Reload(paper);
+            await Settle(window, 4000);
+            if (vm.Workspace.Editor is { } paperEditor)
+            {
+                paperEditor.HideMesh = true;
+                var sheet = paperEditor.AddSprite(bannerFile, banner);
+                sheet.Height = 1.4;
+                paperEditor.Tab = "Snap";
+                paperEditor.AutoSnapCommand.Execute("Detect");
+                await Settle(window, 600);
+                paperEditor.SelectMarker(1);
+                paperEditor.SnapConstraint = "y";
+                var start = paperEditor.SnapPoints[1].Position;
+                paperEditor.MoveMarker(1, start + new System.Numerics.Vector3(0, 0.66f, 0), "y"); // lands near the middle (0.7): sticks to it
+                await Settle(window, 800);
+                Save(window, outDir, "9-snap-tool");
+                Console.WriteLine("snap points: " + string.Join(" | ", paperEditor.SnapPoints.Select(r => $"#{r.Number} {r.Label} ({r.X}, {r.Y}, {r.Z})")));
+
+                // Screen <-> 3D round trip, as the viewport uses for dragging.
+                if (paperEditor.Parts is { } shown)
+                {
+                    var projection = Valheim.SoftwareRenderer.Project(shown, new Valheim.OrbitCamera(), 800, 600);
+                    var p = paperEditor.SnapPoints[0].Position;
+                    var s = projection.ToScreen(p)!.Value;
+                    var (o, d) = projection.Ray(s.X, s.Y);
+                    var miss = System.Numerics.Vector3.Cross(p - o, d).Length();
+                    Console.WriteLine($"ray round trip miss: {miss:0.#####} m");
+                }
+
+                paperEditor.SaveNow();
+            }
+
             vm.GoTo(Step.Publish);
             await Settle(window, 600);
             vm.Publish.MakeIconCommand.Execute(null);

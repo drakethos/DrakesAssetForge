@@ -27,14 +27,29 @@ public sealed partial class SnapRow : ObservableObject
     [ObservableProperty] private double _x;
     [ObservableProperty] private double _y;
     [ObservableProperty] private double _z;
+    /// <summary>1-based, matching the number drawn beside the point in the viewport.</summary>
+    [ObservableProperty] private int _number;
+    /// <summary>Where it sits on the model: "bottom-left-front corner", "top centre"…</summary>
+    [ObservableProperty] private string _label = "";
+    [ObservableProperty] private bool _isSelected;
     public IRelayCommand? RemoveCommand { get; set; }
+    public IRelayCommand? SelectCommand { get; set; }
+
+    public Vector3 Position => new((float)X, (float)Y, (float)Z);
+
+    public void MoveTo(Vector3 p)
+    {
+        X = Math.Round(p.X, 3);
+        Y = Math.Round(p.Y, 3);
+        Z = Math.Round(p.Z, 3);
+    }
 }
 
 /// <summary>
 /// Edits one recipe. Every change rebuilds the recipe, re-renders the viewport, and saves after a short
 /// pause (and pushes to the game when live push is on).
 /// </summary>
-public sealed partial class ItemEditorViewModel : ObservableObject
+public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEditor
 {
     public static readonly string[] Tools = { "Hammer", "Hoe", "Cultivator" };
     public static readonly string[] PieceCategories = { "Misc", "Crafting", "Building", "HeavyBuild", "Furniture" };
@@ -273,6 +288,111 @@ public sealed partial class ItemEditorViewModel : ObservableObject
     [ObservableProperty] private string _snapMode;
     public ObservableCollection<SnapRow> SnapPoints { get; } = new();
     [ObservableProperty] private string _baseSnapText = "";
+    [ObservableProperty] private SnapRow? _selectedSnap;
+    /// <summary>How dragging a point moves it: free, x, y, z, floor.</summary>
+    [ObservableProperty] private string _snapConstraint = "free";
+    /// <summary>Stick to the model's edges, centre and 0 while dragging.</summary>
+    [ObservableProperty] private bool _snapToEdges = true;
+    /// <summary>Grid step in metres while dragging (0 = off).</summary>
+    [ObservableProperty] private double _snapGrid;
+    [ObservableProperty] private string _shapeText = "";
+    /// <summary>The placed model's box (Unity space): what labels, auto points and the magnet measure against.</summary>
+    private Box _shape = new(new Vector3(float.MaxValue), new Vector3(float.MinValue));
+
+    public bool SnapKeep => SnapMode == "keep";
+    public bool SnapAdd => SnapMode == "add";
+    public bool SnapReplace => SnapMode == "replace";
+    public bool SnapEditable => SnapMode != "keep";
+    public bool HasSnapPoints => SnapPoints.Count > 0;
+    public bool LockFree => SnapConstraint == "free";
+    public bool LockX => SnapConstraint == "x";
+    public bool LockY => SnapConstraint == "y";
+    public bool LockZ => SnapConstraint == "z";
+    public bool LockFloor => SnapConstraint == "floor";
+    public static readonly double[] GridSteps = { 0, 0.05, 0.1, 0.25, 0.5, 1 };
+    public bool MarkerEditing => TabSnap && SnapEditable;
+    public string ViewportHint => MarkerEditing
+        ? "Drag a numbered point to move it · Delete removes the selected one · drag elsewhere to orbit · wheel to zoom"
+        : "Drag to orbit · wheel to zoom · double-click to reset. Approximate shading; Push to game for the real look.";
+
+    partial void OnSnapConstraintChanged(string value)
+    {
+        foreach (var name in new[] { nameof(LockFree), nameof(LockX), nameof(LockY), nameof(LockZ), nameof(LockFloor) })
+            OnPropertyChanged(name);
+    }
+
+    partial void OnSelectedSnapChanged(SnapRow? oldValue, SnapRow? newValue)
+    {
+        if (oldValue != null)
+            oldValue.IsSelected = false;
+        if (newValue != null)
+            newValue.IsSelected = true;
+        Refresh();
+    }
+
+    [RelayCommand]
+    private void SetSnapMode(string mode) => SnapMode = mode;
+
+    [RelayCommand]
+    private void SetConstraint(string constraint) => SnapConstraint = constraint;
+
+    /// <summary>Points from the model's shape. Auto-detect replaces your points; the others add (skipping duplicates).</summary>
+    [RelayCommand]
+    private void AutoSnap(string preset)
+    {
+        var kind = Enum.Parse<SnapGeometry.Preset>(preset);
+        if (_shape.IsEmpty)
+            return;
+        if (kind == SnapGeometry.Preset.Detect)
+            SnapPoints.Clear();
+        foreach (var p in SnapGeometry.Points(_shape, kind))
+            if (!SnapPoints.Any(r => Vector3.Distance(r.Position, p) < 0.01f))
+                AddSnapRow(p.X, p.Y, p.Z);
+        if (SnapMode == "keep")
+            SnapMode = "replace";
+        SelectedSnap = null;
+        Refresh();
+    }
+
+    [RelayCommand]
+    private void ClearSnapPoints()
+    {
+        SnapPoints.Clear();
+        SelectedSnap = null;
+    }
+
+    // IMarkerEditor: the viewport picks and drags your points (ids are row indices).
+    public void SelectMarker(int id) => SelectedSnap = SnapPoints.ElementAtOrDefault(id);
+
+    public void MoveMarker(int id, Vector3 unityPosition, string constraint)
+    {
+        if (SnapPoints.ElementAtOrDefault(id) is not { } row)
+            return;
+        var snapped = SnapGeometry.Snap(unityPosition, _shape, SnapToEdges, (float)SnapGrid,
+            constraint is "free" or "x" or "floor", constraint is "free" or "y", constraint is "free" or "z" or "floor");
+        row.MoveTo(snapped);
+    }
+
+    public void EndMarkerDrag(int id) => ScheduleSave();
+
+    public void DeleteMarker(int id)
+    {
+        if (SnapPoints.ElementAtOrDefault(id) is { } row)
+        {
+            SnapPoints.Remove(row);
+            SelectedSnap = null;
+        }
+    }
+
+    /// <summary>Numbers and words for every point, after the shape or a point changed.</summary>
+    private void UpdateSnapLabels()
+    {
+        for (var i = 0; i < SnapPoints.Count; i++)
+        {
+            SnapPoints[i].Number = i + 1;
+            SnapPoints[i].Label = SnapGeometry.Label(SnapPoints[i].Position, _shape);
+        }
+    }
 
     private VanillaPreview? _base;
     private VanillaPreview? _meshSource;
@@ -425,6 +545,14 @@ public sealed partial class ItemEditorViewModel : ObservableObject
             return own == selected && selected != null ? look with { Highlight = true } : look;
         };
 
+        // The placed model (not worn, not compare) is what snap points belong to.
+        if (!worn && !CompareToBase)
+        {
+            _shape = SnapGeometry.Bounds(parts);
+            ShapeText = _shape.IsEmpty ? "" : $"Model: {_shape.Size.X:0.##} wide × {_shape.Size.Y:0.##} tall × {_shape.Size.Z:0.##} deep (m)";
+        }
+
+        UpdateSnapLabels();
         var markers = new List<Marker>();
         if (ShowSnapPoints || TabSnap)
         {
@@ -432,7 +560,7 @@ public sealed partial class ItemEditorViewModel : ObservableObject
             if (mode != "replace")
                 markers.AddRange((_base?.Info.SnapPoints ?? Array.Empty<Vector3>()).Select(p => new Marker(p, 0xFF7FB2E5)));
             if (mode != "keep")
-                markers.AddRange(SnapPoints.Select(p => new Marker(new Vector3((float)p.X, (float)p.Y, (float)p.Z), 0xFFE8893C, 11)));
+                markers.AddRange(SnapPoints.Select((p, i) => new Marker(p.Position, 0xFFE8893C, 11, i, (i + 1).ToString(), p.IsSelected)));
         }
 
         Markers = markers;
@@ -455,6 +583,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(TabComponents));
         OnPropertyChanged(nameof(TabRecipe));
         OnPropertyChanged(nameof(TabSnap));
+        OnPropertyChanged(nameof(MarkerEditing));
+        OnPropertyChanged(nameof(ViewportHint));
         Refresh();
     }
 
@@ -482,6 +612,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject
 
     partial void OnSnapModeChanged(string value)
     {
+        foreach (var name in new[] { nameof(SnapKeep), nameof(SnapAdd), nameof(SnapReplace), nameof(SnapEditable), nameof(MarkerEditing), nameof(ViewportHint) })
+            OnPropertyChanged(name);
         Refresh();
         ScheduleSave();
     }
@@ -504,7 +636,12 @@ public sealed partial class ItemEditorViewModel : ObservableObject
     private void OnRowsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         foreach (INotifyPropertyChanged row in e.NewItems ?? Array.Empty<object>())
-            row.PropertyChanged += (_, _) => RowEdited(sender);
+            row.PropertyChanged += (_, a) =>
+            {
+                // Display-only properties (numbers, labels, selection) are set by Refresh itself.
+                if (a.PropertyName is not (nameof(SnapRow.Label) or nameof(SnapRow.Number) or nameof(SnapRow.IsSelected)))
+                    RowEdited(sender);
+            };
         RowEdited(sender);
     }
 
@@ -514,6 +651,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject
             Refresh();
         if (collection == Sprites)
             OnPropertyChanged(nameof(HasSprites));
+        if (collection == SnapPoints)
+            OnPropertyChanged(nameof(HasSnapPoints));
         ScheduleSave();
     }
 
@@ -673,22 +812,38 @@ public sealed partial class ItemEditorViewModel : ObservableObject
         Requirements.Add(row);
     }
 
+    /// <summary>A new point on top of the model, selected so it can be dragged straight away.</summary>
     [RelayCommand]
-    private void AddSnapPoint() => AddSnapRow(0, 1, 0);
+    private void AddSnapPoint()
+    {
+        var at = _shape.IsEmpty ? new Vector3(0, 1, 0) : _shape.Center with { Y = _shape.Max.Y };
+        var row = AddSnapRow(at.X, at.Y, at.Z);
+        if (SnapMode == "keep")
+            SnapMode = "add";
+        SelectedSnap = row;
+    }
 
     [RelayCommand]
     private void CopyBaseSnapPoints()
     {
         foreach (var p in _base?.Info.SnapPoints ?? Array.Empty<Vector3>())
-            AddSnapRow(p.X, p.Y, p.Z);
+            if (!SnapPoints.Any(r => Vector3.Distance(r.Position, p) < 0.01f))
+                AddSnapRow(p.X, p.Y, p.Z);
         if (SnapMode == "keep")
             SnapMode = "replace";
     }
 
-    private void AddSnapRow(double x, double y, double z)
+    private SnapRow AddSnapRow(double x, double y, double z)
     {
         var row = new SnapRow { X = Math.Round(x, 3), Y = Math.Round(y, 3), Z = Math.Round(z, 3) };
-        row.RemoveCommand = new RelayCommand(() => SnapPoints.Remove(row));
+        row.RemoveCommand = new RelayCommand(() =>
+        {
+            if (SelectedSnap == row)
+                SelectedSnap = null;
+            SnapPoints.Remove(row);
+        });
+        row.SelectCommand = new RelayCommand(() => SelectedSnap = SelectedSnap == row ? null : row);
         SnapPoints.Add(row);
+        return row;
     }
 }

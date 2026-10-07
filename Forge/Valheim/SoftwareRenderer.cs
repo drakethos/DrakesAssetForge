@@ -5,14 +5,66 @@ namespace DrakesForge.Valheim;
 /// <summary>How one material slot draws. Lets the editor preview tints and swapped materials without touching the model.</summary>
 public readonly record struct SlotLook(RgbaImage? Albedo, Vector4 Color, bool Highlight = false);
 
-/// <summary>A dot drawn over the model (snap points). Position is in Unity's axes, local to the prefab root.</summary>
-public readonly record struct Marker(Vector3 UnityPosition, uint Argb, int Size = 9);
+/// <summary>
+/// A dot drawn over the model (snap points). Position is in Unity's axes, local to the prefab root.
+/// <paramref name="Id"/> ≥ 0 makes it draggable in the viewport; <paramref name="Label"/> is drawn beside it.
+/// </summary>
+public readonly record struct Marker(Vector3 UnityPosition, uint Argb, int Size = 9, int Id = -1, string? Label = null, bool Selected = false);
 
 public sealed class OrbitCamera
 {
     public float Yaw { get; set; } = 0.7f;
     public float Pitch { get; set; } = 0.3f;
     public float Zoom { get; set; } = 1f;
+}
+
+/// <summary>
+/// The camera of one rendered frame: Unity-space points to screen pixels and back. The viewport mirrors X
+/// (Unity is left-handed), which this hides from callers.
+/// </summary>
+public readonly struct Projection
+{
+    private readonly Matrix4x4 _viewProj;
+    private readonly Matrix4x4 _inverse;
+    private readonly int _width;
+    private readonly int _height;
+
+    public Projection(Matrix4x4 viewProj, Vector3 eye, int width, int height)
+    {
+        _viewProj = viewProj;
+        Matrix4x4.Invert(viewProj, out _inverse);
+        Eye = new Vector3(-eye.X, eye.Y, eye.Z);
+        _width = width;
+        _height = height;
+    }
+
+    /// <summary>Camera position, Unity space.</summary>
+    public Vector3 Eye { get; }
+
+    /// <summary>Screen pixel of a Unity-space point, or null when it's behind the camera.</summary>
+    public Vector2? ToScreen(Vector3 unity)
+    {
+        var clip = Vector4.Transform(new Vector4(-unity.X, unity.Y, unity.Z, 1f), _viewProj);
+        if (clip.W <= 1e-5f)
+            return null;
+        return new Vector2((clip.X / clip.W * 0.5f + 0.5f) * _width, (0.5f - clip.Y / clip.W * 0.5f) * _height);
+    }
+
+    /// <summary>The ray under a screen pixel: origin and unit direction, Unity space.</summary>
+    public (Vector3 Origin, Vector3 Direction) Ray(float x, float y)
+    {
+        var nx = x / _width * 2f - 1f;
+        var ny = 1f - y / _height * 2f;
+        var near = Unproject(new Vector4(nx, ny, 0f, 1f));
+        var far = Unproject(new Vector4(nx, ny, 1f, 1f));
+        return (near, Vector3.Normalize(far - near));
+    }
+
+    private Vector3 Unproject(Vector4 ndc)
+    {
+        var p = Vector4.Transform(ndc, _inverse);
+        return new Vector3(-p.X / p.W, p.Y / p.W, p.Z / p.W);
+    }
 }
 
 /// <summary>
@@ -33,15 +85,7 @@ public static class SoftwareRenderer
         if (parts.Count == 0)
             return new RgbaImage { Width = width, Height = height, Bgra = color };
 
-        var (center, radius) = Bounds(parts, markers);
-        var distance = radius * 3f / Math.Max(camera.Zoom, 0.05f);
-        var eye = center + distance * new Vector3(
-            MathF.Cos(camera.Pitch) * MathF.Sin(camera.Yaw),
-            MathF.Sin(camera.Pitch),
-            MathF.Cos(camera.Pitch) * MathF.Cos(camera.Yaw));
-        var view = Matrix4x4.CreateLookAt(eye, center, Vector3.UnitY);
-        var proj = Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 5.5f, width / (float)height, radius * 0.05f, distance + radius * 4);
-        var viewProj = view * proj;
+        var viewProj = ViewProjection(parts, camera, width, height, out _);
 
         foreach (var part in parts)
         {
@@ -73,14 +117,38 @@ public static class SoftwareRenderer
                 continue;
             var sx = (int)((clip.X / clip.W * 0.5f + 0.5f) * width);
             var sy = (int)((0.5f - clip.Y / clip.W * 0.5f) * height);
-            Dot(color, width, height, sx, sy, marker.Size, marker.Argb);
+            Dot(color, width, height, sx, sy, marker.Size, marker.Argb, marker.Selected);
         }
 
         return new RgbaImage { Width = width, Height = height, Bgra = color };
     }
 
-    private static void Dot(byte[] color, int width, int height, int cx, int cy, int size, uint argb)
+    /// <summary>The frame's camera, for hit-testing and dragging markers over a rendered image.</summary>
+    public static Projection Project(IReadOnlyList<ModelPart> parts, OrbitCamera camera, int width, int height)
     {
+        var viewProj = ViewProjection(parts, camera, width, height, out var eye);
+        return new Projection(viewProj, eye, width, height);
+    }
+
+    // Framed on the model only, so dragging a snap point never moves the camera.
+    private static Matrix4x4 ViewProjection(IReadOnlyList<ModelPart> parts, OrbitCamera camera, int width, int height, out Vector3 eye)
+    {
+        var (center, radius) = Bounds(parts);
+        // A little room around the model, so points on its outline stay grabbable.
+        var distance = radius * 3.6f / Math.Max(camera.Zoom, 0.05f);
+        eye = center + distance * new Vector3(
+            MathF.Cos(camera.Pitch) * MathF.Sin(camera.Yaw),
+            MathF.Sin(camera.Pitch),
+            MathF.Cos(camera.Pitch) * MathF.Cos(camera.Yaw));
+        var view = Matrix4x4.CreateLookAt(eye, center, Vector3.UnitY);
+        var proj = Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 5.5f, width / (float)height, radius * 0.05f, distance + radius * 4);
+        return view * proj;
+    }
+
+    private static void Dot(byte[] color, int width, int height, int cx, int cy, int size, uint argb, bool selected = false)
+    {
+        if (selected)
+            Dot(color, width, height, cx, cy, size + 6, 0xFFFFFFFF);
         var r = size / 2;
         for (var y = cy - r - 1; y <= cy + r + 1; y++)
         for (var x = cx - r - 1; x <= cx + r + 1; x++)

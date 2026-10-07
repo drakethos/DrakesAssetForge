@@ -42,20 +42,23 @@ internal static class Sprites
         }
     }
 
-    /// <summary>Pivot at the bottom centre, front facing -Z; the back face (if any) has mirrored UVs.</summary>
+    /// <summary>
+    /// Pivot at the bottom centre, front facing +Z (the prefab's forward), image reading correctly from the front.
+    /// The back face (if any) is mirrored back so it reads correctly too. Unity's front faces wind clockwise.
+    /// </summary>
     public static Mesh Quad(float width, float height, bool doubleSided)
     {
         var w = width / 2f;
         var vertices = new List<Vector3> { new(-w, 0, 0), new(-w, height, 0), new(w, height, 0), new(w, 0, 0) };
-        var normals = Enumerable.Repeat(Vector3.back, 4).ToList();
-        var uvs = new List<Vector2> { new(0, 0), new(0, 1), new(1, 1), new(1, 0) };
-        var triangles = new List<int> { 0, 1, 2, 0, 2, 3 };
+        var normals = Enumerable.Repeat(Vector3.forward, 4).ToList();
+        var uvs = new List<Vector2> { new(1, 0), new(1, 1), new(0, 1), new(0, 0) };
+        var triangles = new List<int> { 2, 1, 0, 2, 0, 3 };
         if (doubleSided)
         {
             vertices.AddRange(vertices.ToList());
-            normals.AddRange(Enumerable.Repeat(Vector3.forward, 4));
-            uvs.AddRange(new Vector2[] { new(1, 0), new(1, 1), new(0, 1), new(0, 0) });
-            triangles.AddRange(new[] { 4, 6, 5, 4, 7, 6 });
+            normals.AddRange(Enumerable.Repeat(Vector3.back, 4));
+            uvs.AddRange(new Vector2[] { new(0, 0), new(0, 1), new(1, 1), new(1, 0) });
+            triangles.AddRange(new[] { 4, 5, 6, 4, 6, 7 });
         }
 
         var mesh = new Mesh { name = "forge_sprite" };

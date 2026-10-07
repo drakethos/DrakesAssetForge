@@ -8,6 +8,7 @@ Two things release from this repo, each with its own version and tag:
 ## App 0.2.0 (not released yet)
 
 - Sprites: put flat images (PNG with transparency) on any item or piece: signs, banners, posters, a note lying on the floor. Size, position, rotation, one or both sides, with "Stand up" / "Lie flat" presets and a live preview; optionally hide the base model so the sprite is the whole look.
+- Snap points, redone: auto-detect from the model's shape (floors and walls get their face corners, beams their ends, anything else its 8 corners) plus one-click bottom/top corners, edge middles and centre line; drag numbered points in the viewport, locked to X, Y, Z or level, sticking to the model's edges and middle or a grid; every point is named ("bottom-left corner", "top edge middle") with a front/right/up compass in the viewport; Delete removes the selected point.
 - Fire & lights on the Look tab: light colour, brightness and reach, flame colour, for anything with fire or lights (braziers, wards, torches).
 - Material glow: emission colour plus strength (colours accept `#RRGGBB*k` for HDR).
 - Components: remove any script with an "are you sure?" that says what breaks, undo from the Removed list; add Rigidbody, colliders, lights or any of Valheim's ~380 scripts, starting from the game's own defaults.

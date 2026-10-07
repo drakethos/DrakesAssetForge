@@ -229,6 +229,17 @@ internal static class Screenshots
                 poleEditor.SaveNow();
             }
 
+            // Duplicate, then copy + paste (a second copy under the next free id).
+            vm.Workspace.Selected = vm.Workspace.Items.FirstOrDefault(i => i.Recipe.Id == "screens_banner_pole");
+            await Settle(window, 500);
+            vm.Workspace.DuplicateCommand.Execute(null);
+            await Settle(window, 800);
+            await vm.Workspace.CopyCommand.ExecuteAsync(null);
+            await vm.Workspace.PasteCommand.ExecuteAsync(null);
+            await Settle(window, 800);
+            Console.WriteLine("after duplicate/paste: " + string.Join(", ", vm.Pack!.Recipes.Where(r => r.Id.StartsWith("screens_banner_pole")).Select(r => $"{r.Id} '{r.Name}' sprites={r.Look.Sprites.Count}")));
+            Save(window, outDir, "8b-duplicate");
+
             // Snap tool on a "paper" piece: floor base hidden, a standing sprite, auto-detected points, one dragged up.
             var paper = new Format.ItemRecipe { Id = "screens_paper", Base = "wood_floor_1x1", Kind = Format.RecipeKind.Piece, Name = "Paper" };
             vm.Pack!.SaveRecipe(paper);

@@ -6,6 +6,23 @@ using DrakesForge.Valheim;
 
 namespace DrakesForge.App.Services;
 
+/// <summary>How the plain C# export is written.</summary>
+public sealed class LiteOptions
+{
+    public const string LibsDependency = "DrakeMods-DrakeModsLibs-0.10.0";
+
+    /// <summary>Call DrakeModsLibs.Forge instead of writing a ForgeLite helper next to the items.</summary>
+    public bool UseLibs { get; init; }
+    /// <summary>Images go inside the DLL (EmbeddedResource) instead of a folder beside it.</summary>
+    public bool Embed { get; init; }
+    /// <summary>Only the looks (Build/Dress/Icon per recipe); the mod registers its items itself.</summary>
+    public bool LookOnly { get; init; }
+    /// <summary>Namespace of the generated code (default: the project's, or the pack id).</summary>
+    public string? Namespace { get; init; }
+    /// <summary>Write generated files under this subfolder of the project (e.g. "Paper/Generated").</summary>
+    public string? Subfolder { get; init; }
+}
+
 /// <summary>What the generator needs to know about the game: each base prefab's scripts and fields, and added components' fields.</summary>
 public sealed class LiteTypeInfo
 {
@@ -61,18 +78,32 @@ public static class LiteCodeWriter
 
     public static string DefaultFolder(PackProject pack) => CodeProjectWriter.DefaultFolder(pack) + "-plain";
 
-    public static CodeExportResult Write(PackProject pack, string folder, bool intoExisting, LiteTypeInfo types, PushTarget? deployTo, string? valheimPath)
+    public static CodeExportResult Write(PackProject pack, string folder, bool intoExisting, LiteTypeInfo types, PushTarget? deployTo, string? valheimPath,
+        LiteOptions? options = null)
     {
+        var o = options ?? new LiteOptions();
         Directory.CreateDirectory(folder);
         var name = PushTarget.Sanitize(pack.Manifest.Id);
-        var ns = intoExisting ? CodeProjectWriter.ReadNamespace(folder) ?? name : name;
+        var ns = o.Namespace ?? (intoExisting ? CodeProjectWriter.ReadNamespace(folder) ?? name : name);
         var author = PushTarget.Sanitize(pack.Manifest.Author.Length > 0 ? pack.Manifest.Author : "Unknown");
         var result = new CodeExportResult { Folder = folder, ProjectFile = intoExisting ? null : Path.Combine(folder, name + ".csproj") };
+        // Everything generated goes under the optional subfolder (e.g. "Paper/Generated"); project files stay at the root.
+        var root = o.Subfolder is { Length: > 0 } sub ? Path.Combine(folder, sub) : folder;
 
-        CodeProjectWriter.Write(result, Path.Combine(folder, "Lite", "ForgeLite.g.cs"), HelperSource().Replace("__NS__", ns));
-        SyncAssets(pack, Path.Combine(folder, "Assets"), result);
+        var helper = Path.Combine(root, "Lite", "ForgeLite.g.cs");
+        if (o.UseLibs)
+        {
+            if (File.Exists(helper))
+                File.Delete(helper);
+        }
+        else
+        {
+            CodeProjectWriter.Write(result, helper, HelperSource().Replace("__NS__", ns));
+        }
 
-        var itemsDir = Path.Combine(folder, "Items");
+        SyncAssets(pack, Path.Combine(root, "Assets"), result);
+
+        var itemsDir = Path.Combine(root, "Items");
         if (Directory.Exists(itemsDir))
             foreach (var stale in Directory.GetFiles(itemsDir, "*.g.cs"))
                 File.Delete(stale);
@@ -82,19 +113,36 @@ public static class LiteCodeWriter
         foreach (var recipe in pack.Recipes.OrderBy(r => r.Id, StringComparer.OrdinalIgnoreCase))
         {
             var type = CodeProjectWriter.TypeName(recipe.Name ?? recipe.Id, used);
-            CodeProjectWriter.Write(result, Path.Combine(itemsDir, type + ".g.cs"), ItemSource(ns, type, recipe, types));
-            CodeProjectWriter.WriteOnce(result, Path.Combine(folder, "Customize", type + ".cs"), CustomizeStub(ns, type, recipe));
+            if (o.LookOnly)
+            {
+                CodeProjectWriter.Write(result, Path.Combine(itemsDir, type + ".g.cs"), LookSource(ns, type, recipe, types, o));
+                continue;
+            }
+
+            CodeProjectWriter.Write(result, Path.Combine(itemsDir, type + ".g.cs"), ItemSource(ns, type, recipe, types, o));
+            CodeProjectWriter.WriteOnce(result, Path.Combine(root, "Customize", type + ".cs"), CustomizeStub(ns, type, recipe));
             builds.Append($"\n            Build(\"{CodeProjectWriter.Escape(recipe.Id)}\", Items.{type}.Build);");
         }
 
-        CodeProjectWriter.Write(result, Path.Combine(folder, "ForgeLiteItems.g.cs"), $$"""
+        // Looks-only: the mod registers its own items and calls Items.X.Build/Dress itself.
+        if (o.LookOnly)
+        {
+            var registry = Path.Combine(root, "ForgeLiteItems.g.cs");
+            if (File.Exists(registry))
+                File.Delete(registry);
+            if (intoExisting)
+                CodeProjectWriter.Write(result, Path.Combine(root, "FORGE-PLAIN.md"), HookupGuide(ns, name, o));
+            return result;
+        }
+
+        CodeProjectWriter.Write(result, Path.Combine(root, "ForgeLiteItems.g.cs"), $$"""
             // <auto-generated>
             // Regenerated by Drakes Asset Forge on every export. Put your code in Customize\<Item>.cs.
             // </auto-generated>
             #nullable enable
             using System;
             using Jotunn.Managers;
-            using {{ns}}.Lite;
+            {{(o.UseLibs ? "" : $"using {ns}.Lite;")}}
 
             namespace {{ns}};
 
@@ -103,7 +151,7 @@ public static class LiteCodeWriter
                 /// <summary>Call once from your plugin's Awake(). Items are built when Valheim's own prefabs are ready.</summary>
                 internal static void Register(string assetsFolder)
                 {
-                    ForgeLite.AssetsFolder = assetsFolder;
+                    {{(o.UseLibs ? "// Images load from inside the DLL (or beside it) through DrakeModsLibs.Forge." : "ForgeLite.AssetsFolder = assetsFolder;")}}
                     PrefabManager.OnVanillaPrefabsAvailable += BuildAll;
                 }
 
@@ -128,16 +176,23 @@ public static class LiteCodeWriter
 
         if (intoExisting)
         {
-            CodeProjectWriter.Write(result, Path.Combine(folder, "FORGE-PLAIN.md"), HookupGuide(ns, name));
+            CodeProjectWriter.Write(result, Path.Combine(root, "FORGE-PLAIN.md"), HookupGuide(ns, name, o));
         }
         else
         {
-            CodeProjectWriter.WriteOnce(result, Path.Combine(folder, name + ".csproj"), CodeProjectWriter.Csproj(name, ns, author, pack.Manifest.Version, "Assets"));
-            CodeProjectWriter.WriteOnce(result, Path.Combine(folder, name + "Plugin.cs"), Plugin(name, ns, author, pack.Manifest.Version));
+            var csproj = CodeProjectWriter.Csproj(name, ns, author, pack.Manifest.Version, "Assets");
+            if (o.Embed)
+                csproj = csproj.Replace("<None Include=\"Assets\\**\\*\" CopyToOutputDirectory=\"PreserveNewest\" />",
+                    "<!-- Images live inside the DLL: nothing to lose when a mod manager flattens folders. -->\n    <EmbeddedResource Include=\"Assets\\**\\*.png;Assets\\**\\*.jpg\" />");
+            if (o.UseLibs)
+                csproj = csproj.Replace("<Reference Include=\"assembly_valheim\"",
+                    "<Reference Include=\"DrakeModsLibs\" HintPath=\"$(BepInExPath)\\plugins\\DrakeMods-DrakeModsLibs\\DrakeModsLibs.dll\" Private=\"false\" />\n    <Reference Include=\"assembly_valheim\"");
+            CodeProjectWriter.WriteOnce(result, Path.Combine(folder, name + ".csproj"), csproj);
+            CodeProjectWriter.WriteOnce(result, Path.Combine(folder, name + "Plugin.cs"), Plugin(name, ns, author, pack.Manifest.Version, o.UseLibs));
             CodeProjectWriter.WriteOnce(result, Path.Combine(folder, "environment.props"), CodeProjectWriter.EnvironmentProps(valheimPath, deployTo));
             CodeProjectWriter.WriteOnce(result, Path.Combine(folder, ".gitignore"), "bin/\nobj/\nenvironment.props\n*.user\n");
             CodeProjectWriter.WriteOnce(result, Path.Combine(folder, "README.md"), CodeProjectWriter.ReadPackFile(pack, "README.md") ?? ThunderstoreFiles.DefaultReadme(pack));
-            CodeProjectWriter.Write(result, Path.Combine(folder, "manifest.json"), ThunderstoreFiles.Manifest(pack, ThunderstoreFiles.CodeModDependencies));
+            CodeProjectWriter.Write(result, Path.Combine(folder, "manifest.json"), ThunderstoreFiles.Manifest(pack, o.UseLibs ? ThunderstoreFiles.CodeModDependencies.Append(LiteOptions.LibsDependency) : ThunderstoreFiles.CodeModDependencies));
             CodeProjectWriter.CopyIfExists(pack, "CHANGELOG.md", folder, result);
             CodeProjectWriter.CopyIfExists(pack, "icon.png", folder, result);
         }
@@ -177,7 +232,7 @@ public static class LiteCodeWriter
 
     // ---- one item ----
 
-    private static string ItemSource(string ns, string type, ItemRecipe recipe, LiteTypeInfo types)
+    private static string ItemSource(string ns, string type, ItemRecipe recipe, LiteTypeInfo types, LiteOptions o)
     {
         var b = new StringBuilder();
         void L(string line = "") => b.Append(line.Length == 0 ? "" : "        " + line).Append('\n');
@@ -224,7 +279,49 @@ public static class LiteCodeWriter
                 break;
         }
 
-        // Same order as Forge: structure, look, names, settings, snap, fire, glow, your code.
+        Dress(recipe, types, l => L(l), lookOnly: false);
+
+        L();
+        L($"Customize.{type}.OnBuilt(prefab);");
+        if (recipe.Kind == RecipeKind.Item)
+            L("ItemManager.Instance.AddItem(custom);");
+        else if (recipe.Kind == RecipeKind.Piece)
+            L("PieceManager.Instance.AddPiece(custom);");
+
+        return Dialect(ns, type, o, $$"""
+            // <auto-generated>
+            // "{{CodeProjectWriter.Escape(recipe.Name ?? recipe.Id)}}": {{recipe.Kind.ToString().ToLowerInvariant()}} from {{recipe.Base}}.
+            // Regenerated by Drakes Asset Forge on every export; don't edit. Your code goes in Customize\{{type}}.cs.
+            // </auto-generated>
+            #nullable enable
+            using Jotunn.Configs;
+            using Jotunn.Entities;
+            using Jotunn.Managers;
+            using UnityEngine;
+            using {{ns}}.Lite;
+
+            namespace {{ns}}.Items;
+
+            internal static class {{type}}
+            {
+                public const string Id = "{{CodeProjectWriter.Escape(recipe.Id)}}";
+
+                internal static void Build()
+                {
+            {{b.ToString().TrimEnd('\n')}}
+                }
+            }
+            """);
+    }
+
+    /// <summary>
+    /// Everything after the prefab exists, in Forge's order: structure, look, names, settings, snap, fire, glow.
+    /// Looks-only leaves out names (the mod sets them), the icon (exposed as <c>Icon</c>) and sprites (<c>Build</c>).
+    /// </summary>
+    private static void Dress(ItemRecipe recipe, LiteTypeInfo types, Action<string> line, bool lookOnly)
+    {
+        void L(string text = "") => line(text);
+
         if (recipe.RemoveComponents.Count > 0 || recipe.AddComponents.Count > 0)
         {
             L();
@@ -236,7 +333,7 @@ public static class LiteCodeWriter
         }
 
         var look = recipe.Look;
-        if (!look.IsEmpty)
+        if (!look.IsEmpty && (!lookOnly || look.Mesh != null || look.Materials.Count > 0 || look.HideMesh))
         {
             L();
             L("// Look");
@@ -246,17 +343,17 @@ public static class LiteCodeWriter
                 L($"// TODO: model file {file} isn't supported by the plain export yet.");
             foreach (var ov in look.Materials)
                 MaterialCall(ov, L);
-            if (look.Icon != null)
+            if (look.Icon != null && !lookOnly)
                 L($"ForgeLite.Icon(prefab, {Str(look.Icon)});");
             // After materials, as in Forge: overrides never touch the sprites.
             if (look.HideMesh)
                 L("ForgeLite.HideMesh(prefab);");
-            foreach (var s in look.Sprites)
-                L($"ForgeLite.AddSprite(prefab, {Str(s.File)}, {F(s.Width)}, {F(s.Height)}, new Vector3({F(s.Position.X)}, {F(s.Position.Y)}, {F(s.Position.Z)}), " +
+            foreach (var s in lookOnly ? new List<SpriteRecipe>() : look.Sprites)
+                L($"ForgeLite.AddSprite(prefab.transform, {Str(s.File)}, {F(s.Width)}, {F(s.Height)}, new Vector3({F(s.Position.X)}, {F(s.Position.Y)}, {F(s.Position.Z)}), " +
                   $"new Vector3({F(s.Rotation.X)}, {F(s.Rotation.Y)}, {F(s.Rotation.Z)}), {Bool(s.DoubleSided)});");
         }
 
-        if (recipe.Name != null || recipe.Description != null)
+        if (!lookOnly && (recipe.Name != null || recipe.Description != null))
         {
             L();
             L("// Name");
@@ -335,38 +432,6 @@ public static class LiteCodeWriter
             L($"ForgeLite.Glow(prefab, {Color(color) ?? "Color.white"}, {F(s.GetValueOrDefault("intensity")?.AsNumber() ?? 1)}, " +
               $"{F(s.GetValueOrDefault("range")?.AsNumber() ?? 4)}, {offset}, {Bool(s.GetValueOrDefault("nightOnly")?.AsBool() ?? false)});");
         }
-
-        L();
-        L($"Customize.{type}.OnBuilt(prefab);");
-        if (recipe.Kind == RecipeKind.Item)
-            L("ItemManager.Instance.AddItem(custom);");
-        else if (recipe.Kind == RecipeKind.Piece)
-            L("PieceManager.Instance.AddPiece(custom);");
-
-        return $$"""
-            // <auto-generated>
-            // "{{CodeProjectWriter.Escape(recipe.Name ?? recipe.Id)}}": {{recipe.Kind.ToString().ToLowerInvariant()}} from {{recipe.Base}}.
-            // Regenerated by Drakes Asset Forge on every export; don't edit. Your code goes in Customize\{{type}}.cs.
-            // </auto-generated>
-            #nullable enable
-            using Jotunn.Configs;
-            using Jotunn.Entities;
-            using Jotunn.Managers;
-            using UnityEngine;
-            using {{ns}}.Lite;
-
-            namespace {{ns}}.Items;
-
-            internal static class {{type}}
-            {
-                public const string Id = "{{CodeProjectWriter.Escape(recipe.Id)}}";
-
-                internal static void Build()
-                {
-            {{b.ToString().TrimEnd('\n')}}
-                }
-            }
-            """;
     }
 
     private static void MaterialCall(MaterialOverride ov, Action<string> line)
@@ -467,7 +532,7 @@ public static class LiteCodeWriter
         }
         """;
 
-    private static string Plugin(string name, string ns, string author, string version) => $$"""
+    private static string Plugin(string name, string ns, string author, string version, bool libs) => $$"""
         using System.IO;
         using BepInEx;
 
@@ -478,7 +543,7 @@ public static class LiteCodeWriter
         /// Created once by Drakes Asset Forge; it's yours to change.
         /// </summary>
         [BepInPlugin(Guid, Name, Version)]
-        [BepInDependency("com.jotunn.jotunn")]
+        [BepInDependency("com.jotunn.jotunn")]{{(libs ? "\n[BepInDependency(\"com.drakemods.libs\")]" : "")}}
         public sealed class {{name}}Plugin : BaseUnityPlugin
         {
             public const string Guid = "{{author.ToLowerInvariant()}}.{{name.ToLowerInvariant()}}";
@@ -492,32 +557,105 @@ public static class LiteCodeWriter
         }
         """;
 
-    private static string HookupGuide(string ns, string name) => $$"""
-        # Drakes Asset Forge items (plain C#)
+    private static string HookupGuide(string ns, string name, LiteOptions o)
+    {
+        var folder = o.Subfolder is { Length: > 0 } sub ? sub.Replace('/', '\\') + "\\" : "";
+        var files = o.LookOnly
+            ? $"`{folder}Items\\*.g.cs` (one class per recipe: `Build(parent, scale)` adds its sprites, `Dress(prefab)` the rest, `Icon`)"
+            : $"`{folder}Items\\*.g.cs`, `{folder}ForgeLiteItems.g.cs`" + (o.UseLibs ? "" : $", `{folder}Lite\\ForgeLite.g.cs`");
+        var register = o.LookOnly
+            ? "Your own code registers the items and calls, for example, `Items.PaperSheet.Build(decor.transform, scale)` and `Items.PaperSheet.Icon`."
+            : $"In your plugin's `Awake()`:\n\n```csharp\n{ns}.ForgeLiteItems.Register(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Info.Location)!, \"Assets\"));\n```";
+        var images = o.Embed
+            ? $"In your `.csproj`, put the images inside the DLL (safe when Hexium/Gale flatten folders):\n\n```xml\n<ItemGroup>\n  <EmbeddedResource Include=\"{folder}Assets\\**\\*.png;{folder}Assets\\**\\*.jpg\" />\n</ItemGroup>\n```"
+            : $"In your `.csproj`, ship the images beside the DLL:\n\n```xml\n<ItemGroup>\n  <None Include=\"{folder}Assets\\**\\*\" CopyToOutputDirectory=\"PreserveNewest\" />\n</ItemGroup>\n```";
+        var refs = o.UseLibs
+            ? "References: DrakeModsLibs 0.10+ (its `DrakeModsLibs.Forge` helpers), Jotunn, assembly_valheim, UnityEngine.CoreModule."
+            : "References (most Jotunn mods have them): Jotunn, assembly_valheim, UnityEngine, UnityEngine.CoreModule,\n   UnityEngine.ImageConversionModule, UnityEngine.ParticleSystemModule, UnityEngine.PhysicsModule,\n   and Valheim's `netstandard.dll` from valheim_Data\\Managed.";
+        return $"""
+            # Drakes Asset Forge items (plain C#)
 
-        Added: `Items\*.g.cs`, `Lite\ForgeLite.g.cs`, `ForgeLiteItems.g.cs` and `Assets\` (all regenerated on export),
-        and `Customize\*.cs` (yours, created once).
+            Regenerated on every export: {files} and `{folder}Assets\` (the pack's images).{(o.LookOnly ? "" : $" Yours, created once: `{folder}Customize\\*.cs`.")}
 
-        1. In your plugin's `Awake()`:
+            1. {register}
 
-        ```csharp
-        {{ns}}.ForgeLiteItems.Register(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Info.Location)!, "Assets"));
-        ```
+            2. {images}
 
-        2. In your `.csproj`, ship the images beside the DLL:
+            3. {refs}
 
-        ```xml
-        <ItemGroup>
-          <None Include="Assets\**\*" CopyToOutputDirectory="PreserveNewest" />
-        </ItemGroup>
-        ```
+            No Forge Runtime and no pack files are needed.
+            """;
+    }
 
-        3. References (most Jotunn mods have them): Jotunn, assembly_valheim, UnityEngine, UnityEngine.CoreModule,
-           UnityEngine.ImageConversionModule, UnityEngine.ParticleSystemModule, UnityEngine.PhysicsModule,
-           and Valheim's `netstandard.dll` from valheim_Data\Managed.
+    /// <summary>
+    /// Looks-only: for a mod that registers its items itself. Per recipe: <c>Build(parent, scale)</c> adds the sprites
+    /// (sizes and positions × scale), <c>Dress(prefab)</c> applies the rest (materials, mesh, settings, snap, fire, glow),
+    /// <c>Icon</c> is the recipe's icon.
+    /// </summary>
+    private static string LookSource(string ns, string type, ItemRecipe recipe, LiteTypeInfo types, LiteOptions o)
+    {
+        var build = new StringBuilder();
+        foreach (var s in recipe.Look.Sprites)
+            build.Append($"        ForgeLite.AddSprite(parent, {Str(s.File)}, {F(s.Width)} * scale, {F(s.Height)} * scale, " +
+                         $"new Vector3({F(s.Position.X)}, {F(s.Position.Y)}, {F(s.Position.Z)}) * scale, " +
+                         $"new Vector3({F(s.Rotation.X)}, {F(s.Rotation.Y)}, {F(s.Rotation.Z)}), {Bool(s.DoubleSided)});\n");
 
-        No Forge Runtime and no pack files are needed: `{{name}}` only depends on Jotunn.
-        """;
+        var dress = new StringBuilder();
+        Dress(recipe, types, l => dress.Append(l.Length == 0 ? "" : "        " + l).Append('\n'), lookOnly: true);
+        var dressBody = dress.ToString().Trim('\n');
+
+        var icon = recipe.Look.Icon != null
+            ? $"\n\n    /// <summary>The recipe's icon ({recipe.Look.Icon}).</summary>\n    internal static Sprite? Icon => ForgeLite.IconSprite({Str(recipe.Look.Icon)});"
+            : "";
+        var dressMethod = dressBody.Length == 0
+            ? ""
+            : $"\n\n    /// <summary>Materials, mesh, settings, snap points, fire and glow on the prefab itself.</summary>\n    internal static void Dress(GameObject prefab)\n    {{\n{dressBody}\n    }}";
+
+        return Dialect(ns, type, o, $$"""
+            // <auto-generated>
+            // "{{CodeProjectWriter.Escape(recipe.Name ?? recipe.Id)}}": look of {{recipe.Kind.ToString().ToLowerInvariant()}} {{recipe.Id}} (base {{recipe.Base}}).
+            // Regenerated by Drakes Asset Forge on every export; don't edit. Change the recipe and export again.
+            // </auto-generated>
+            #nullable enable
+            using UnityEngine;
+            using {{ns}}.Lite;
+
+            namespace {{ns}}.Items;
+
+            internal static class {{type}}
+            {
+                public const string Id = "{{CodeProjectWriter.Escape(recipe.Id)}}";
+
+                /// <summary>Adds the recipe's sprites under <paramref name="parent"/>; sizes and positions are multiplied by <paramref name="scale"/>.</summary>
+                internal static void Build(Transform parent, float scale = 1f)
+                {
+            {{build.ToString().TrimEnd('\n')}}
+                }{{dressMethod}}{{icon}}
+            }
+            """);
+    }
+
+    /// <summary>
+    /// Generated code calls <c>ForgeLite.*</c> (the helper file written next to it). With "Use DrakeModsLibs" the same
+    /// calls go to <c>DrakeModsLibs.Forge.ForgeLook</c>, whose image calls also take the mod's assembly.
+    /// </summary>
+    private static string Dialect(string ns, string type, LiteOptions o, string code)
+    {
+        if (!o.UseLibs)
+            return code;
+        code = code
+            .Replace("ForgeLite.IconSprite(", "ForgeTextures.Sprite(Owner, ")
+            .Replace("ForgeLite.Icon(", "ForgeLook.Icon(Owner, ")
+            .Replace("ForgeLite.SetTexture(", "ForgeLook.SetTexture(Owner, ")
+            .Replace("ForgeLite.AddSprite(", "ForgeLook.AddSprite(Owner, ")
+            .Replace("ForgeLite.", "ForgeLook.")
+            .Replace($"using {ns}.Lite;", "using System.Reflection;\nusing DrakeModsLibs.Forge;");
+        // Images are looked up in this mod's DLL first (embedded), then beside it.
+        // Source line endings depend on the checkout (CRLF/LF): normalise before inserting.
+        code = code.Replace("\r\n", "\n");
+        var marker = $"internal static class {type}\n{{\n";
+        return code.Replace(marker, marker + $"    private static Assembly Owner => typeof({type}).Assembly;\n\n");
+    }
 
     // ---- literals ----
 

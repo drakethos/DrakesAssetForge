@@ -146,10 +146,27 @@
                 </Border>
                 <StackPanel DockPanel.Dock="Bottom" Margin="12" Spacing="6">
                     <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="+ Add from Valheim" Command="{Binding AddMoreCommand}" />
-                    <Button Classes="small ghost" HorizontalAlignment="Center" Content="Remove selected item" Command="{Binding DeleteSelectedCommand}" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4" IsVisible="{Binding LibPack}">
+                        <Button Classes="small ghost" Content="Duplicate" Command="{Binding DuplicateCommand}" ToolTip.Tip="Copy the selected item under a new id (Ctrl+D)" />
+                        <Button Classes="small ghost" Content="Remove" Command="{Binding DeleteSelectedCommand}" ToolTip.Tip="Remove the selected item from the pack" />
+                    </StackPanel>
                 </StackPanel>
                 <Panel>
                     <ListBox IsVisible="{Binding LibPack}" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Margin="6,0">
+                        <ListBox.KeyBindings>
+                            <KeyBinding Gesture="Ctrl+D" Command="{Binding DuplicateCommand}" />
+                            <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyCommand}" />
+                            <KeyBinding Gesture="Ctrl+V" Command="{Binding PasteCommand}" />
+                        </ListBox.KeyBindings>
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Duplicate" InputGesture="Ctrl+D" Command="{Binding DuplicateCommand}" />
+                                <MenuItem Header="Copy" InputGesture="Ctrl+C" Command="{Binding CopyCommand}" />
+                                <MenuItem Header="Paste" InputGesture="Ctrl+V" Command="{Binding PasteCommand}" />
+                                <Separator />
+                                <MenuItem Header="Remove" Command="{Binding DeleteSelectedCommand}" />
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:PackListItem">
                                 <Grid ColumnDefinitions="34,*" ColumnSpacing="10">

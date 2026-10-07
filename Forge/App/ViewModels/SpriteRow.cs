@@ -85,19 +85,22 @@ public sealed partial class SpriteRow : ObservableObject
     public static SpriteRow From(SpriteRecipe s, RgbaImage? image)
     {
         var row = new SpriteRow(s.File, image) { _keepAspect = false };
-        row.Width = s.Width;
-        row.Height = s.Height;
-        row.X = s.Position.X;
-        row.Y = s.Position.Y;
-        row.Z = s.Position.Z;
-        row.RotX = s.Rotation.X;
-        row.RotY = s.Rotation.Y;
-        row.RotZ = s.Rotation.Z;
+        row.Width = R(s.Width);
+        row.Height = R(s.Height);
+        row.X = R(s.Position.X);
+        row.Y = R(s.Position.Y);
+        row.Z = R(s.Position.Z);
+        row.RotX = R(s.Rotation.X);
+        row.RotY = R(s.Rotation.Y);
+        row.RotZ = R(s.Rotation.Z);
         row.DoubleSided = s.DoubleSided;
         // Keep the lock only if the saved size already matches the image.
         row.KeepAspect = Math.Abs(s.Width / Math.Max(s.Height, 1e-4) - row.Aspect) < 0.01;
         return row;
     }
+
+    // Saved values are floats: 0.6f reads back as 0.6000000238 without this.
+    private static double R(float v) => Math.Round(v, 4);
 
     public SpriteRecipe ToRecipe() => new()
     {
@@ -109,41 +112,7 @@ public sealed partial class SpriteRow : ObservableObject
         DoubleSided = DoubleSided
     };
 
-    /// <summary>
-    /// The quad as the runtime builds it (pivot bottom centre, facing +Z, Unity's Z-X-Y rotation order),
-    /// converted to the viewport's axes (X mirrored).
-    /// </summary>
-    public ModelPart ToPart(int slot)
-    {
-        var w = (float)Math.Max(Width, 0.001) / 2f;
-        var h = (float)Math.Max(Height, 0.001);
-        const float deg = MathF.PI / 180f;
-        var rotation = Matrix4x4.CreateRotationZ((float)RotZ * deg) * Matrix4x4.CreateRotationX((float)RotX * deg) * Matrix4x4.CreateRotationY((float)RotY * deg);
-        var offset = new Vector3((float)X, (float)Y, (float)Z);
-        var corners = new[] { new Vector3(-w, 0, 0), new Vector3(-w, h, 0), new Vector3(w, h, 0), new Vector3(w, 0, 0) };
-        var normal = Vector3.TransformNormal(new Vector3(0, 0, 1), rotation);
-
-        var positions = new float[12];
-        var normals = new float[12];
-        for (var i = 0; i < 4; i++)
-        {
-            var p = Vector3.Transform(corners[i], rotation) + offset;
-            positions[i * 3] = -p.X;
-            positions[i * 3 + 1] = p.Y;
-            positions[i * 3 + 2] = p.Z;
-            normals[i * 3] = -normal.X;
-            normals[i * 3 + 1] = normal.Y;
-            normals[i * 3 + 2] = normal.Z;
-        }
-
-        return new ModelPart
-        {
-            Name = "sprite " + FileName,
-            Positions = positions,
-            Normals = normals,
-            Uvs = new float[] { 1, 0, 1, 1, 0, 1, 0, 0 },
-            Indices = new[] { 0, 1, 2, 0, 2, 3 },
-            MaterialSlot = slot
-        };
-    }
+    /// <summary>The quad as the runtime builds it, in the viewport's axes.</summary>
+    public ModelPart ToPart(int slot) =>
+        SpriteGeometry.Part(FileName, Width, Height, new Vector3((float)X, (float)Y, (float)Z), new Vector3((float)RotX, (float)RotY, (float)RotZ), slot);
 }

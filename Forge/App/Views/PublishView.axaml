@@ -132,6 +132,14 @@
                                     <RadioButton Classes="seg" Content="Into my existing mod" GroupName="codeMode" IsChecked="{Binding IntoExisting}" />
                                 </StackPanel>
                             </Border>
+                            <StackPanel Spacing="4" IsVisible="{Binding OutputPlain}">
+                                <CheckBox Content="Images inside the DLL" IsChecked="{Binding PlainEmbed}"
+                                          ToolTip.Tip="Embedded resources: nothing to lose when Hexium or Gale flatten plugin folders" />
+                                <CheckBox Content="Use DrakeModsLibs helpers" IsChecked="{Binding PlainUseLibs}"
+                                          ToolTip.Tip="Calls DrakeModsLibs.Forge (0.10+) instead of writing a helper file into your mod" />
+                                <CheckBox Content="Looks only (my mod registers the items)" IsChecked="{Binding PlainLookOnly}" IsEnabled="{Binding IntoExisting}"
+                                          ToolTip.Tip="Per item: Build(parent, scale) adds its sprites, Dress(prefab) the rest, Icon. For mods with their own registration and gameplay." />
+                            </StackPanel>
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
                                 <Border Classes="chip"><TextBlock Text="{Binding CodeFolder}" Classes="mono" TextTrimming="CharacterEllipsis" /></Border>
                                 <Button Grid.Column="1" Classes="small" Content="Change…" Command="{Binding ChooseCodeFolderCommand}" />

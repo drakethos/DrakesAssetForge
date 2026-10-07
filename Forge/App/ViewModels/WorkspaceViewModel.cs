@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DrakesForge.Format;
+using DrakesForge.Format.Json;
 
 namespace DrakesForge.App.ViewModels;
 
@@ -139,6 +140,119 @@ public sealed partial class WorkspaceViewModel : ObservableObject
         _main.Pack.DeleteRecipe(Selected.Recipe);
         _main.RecipeSaved($"removed {Selected.Recipe.Id}");
         Reload();
+    }
+
+    // Duplicate / copy / paste -------------------------------------------------------------------
+
+    private const string ClipboardKind = "drakesAssetForge.recipe";
+
+    /// <summary>A copy of the selected item under a new id, selected for editing. A reskin's copy becomes a new item/piece.</summary>
+    [RelayCommand]
+    private void Duplicate()
+    {
+        if (Selected == null || _main.Pack == null)
+            return;
+        Add(Clone(Selected.Recipe), $"duplicated {Selected.Recipe.Id}");
+    }
+
+    /// <summary>Puts the selected item on the clipboard (as recipe JSON, with where its files live).</summary>
+    [RelayCommand]
+    private async Task Copy()
+    {
+        if (Selected == null || _main.Pack == null)
+            return;
+        var wrapper = JsonValue.NewObject()
+            .Set("kind", ClipboardKind)
+            .Set("packRoot", _main.Pack.Root)
+            .Set("recipe", JsonValue.Parse(RecipeSerializer.WriteRecipe(Selected.Recipe)));
+        await Services.Dialogs.CopyTextAsync(wrapper.ToJson());
+        _main.Status = $"Copied {Selected.Title}. Paste here or in another pack (Ctrl+V).";
+    }
+
+    /// <summary>Adds the item on the clipboard (from this or another pack, or a plain recipe JSON) under a free id.</summary>
+    [RelayCommand]
+    private async Task Paste()
+    {
+        var pack = _main.Pack;
+        if (pack == null || await Services.Dialogs.PasteTextAsync() is not { } text)
+            return;
+        JsonValue json;
+        try
+        {
+            json = JsonValue.Parse(text);
+        }
+        catch (FormatException)
+        {
+            _main.Status = "The clipboard doesn't hold an item (copy one in the pack list first).";
+            return;
+        }
+
+        var recipeJson = json["kind"]?.AsString() == ClipboardKind ? json["recipe"] : json;
+        if (recipeJson is not { IsObject: true } || recipeJson["id"] == null || recipeJson["base"] == null)
+        {
+            _main.Status = "The clipboard doesn't hold an item (copy one in the pack list first).";
+            return;
+        }
+
+        var problems = new List<string>();
+        var recipe = RecipeSerializer.ReadRecipe(recipeJson.ToJson(), problems);
+        var from = json["packRoot"]?.AsString();
+        var copied = from != null && !string.Equals(Path.GetFullPath(from), Path.GetFullPath(pack.Root), StringComparison.OrdinalIgnoreCase)
+            ? CopyFiles(recipe, from, pack)
+            : 0;
+        var clash = pack.Recipes.Any(r => r.Id == recipe.Id);
+        Add(clash ? Clone(recipe) : recipe, $"pasted {recipe.Id}{(copied > 0 ? $" with {copied} file(s)" : "")}");
+    }
+
+    private void Add(ItemRecipe recipe, string what)
+    {
+        _main.Pack!.SaveRecipe(recipe);
+        _main.RecipeSaved(what);
+        Reload(recipe);
+    }
+
+    /// <summary>A deep copy with a free id ("_copy", "_copy2"…) and "(copy)" on its name.</summary>
+    private ItemRecipe Clone(ItemRecipe source)
+    {
+        var copy = RecipeSerializer.ReadRecipe(RecipeSerializer.WriteRecipe(source), new List<string>());
+        copy.SourcePath = null;
+        if (copy.Kind == RecipeKind.Reskin)
+        {
+            // Two reskins of one prefab would fight; the copy becomes its own item or piece.
+            var isPiece = _main.Vanilla?.Catalog.ByName.TryGetValue(copy.Base, out var entry) == true && entry.Kind == Valheim.VanillaKind.Piece;
+            copy.Kind = isPiece ? RecipeKind.Piece : RecipeKind.Item;
+            copy.Name ??= copy.Base;
+        }
+
+        var stem = System.Text.RegularExpressions.Regex.Replace(copy.Id, "_copy\\d*$", "");
+        var id = stem + "_copy";
+        for (var n = 2; _main.Pack!.Recipes.Any(r => r.Id == id) || File.Exists(Path.Combine(_main.Pack.Root, ForgePack.ItemsFolder, id + ".json")); n++)
+            id = stem + "_copy" + n;
+        copy.Id = id;
+        if (copy.Name != null && !copy.Name.EndsWith("(copy)", StringComparison.Ordinal))
+            copy.Name += " (copy)";
+        return copy;
+    }
+
+    /// <summary>Brings the PNGs a pasted recipe uses from its own pack (same paths; existing files are kept).</summary>
+    private static int CopyFiles(ItemRecipe recipe, string fromRoot, Services.PackProject to)
+    {
+        var files = new List<string?> { recipe.Look.Icon };
+        files.AddRange(recipe.Look.Materials.SelectMany(m => m.Textures.Values));
+        files.AddRange(recipe.Look.Sprites.Select(s => s.File));
+        var count = 0;
+        foreach (var relative in files.Where(f => !string.IsNullOrEmpty(f)).Distinct())
+        {
+            var source = Path.Combine(fromRoot, relative!.Replace('/', Path.DirectorySeparatorChar));
+            var target = to.FullPath(relative)!;
+            if (!File.Exists(source) || File.Exists(target))
+                continue;
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target);
+            count++;
+        }
+
+        return count;
     }
 
     [RelayCommand]

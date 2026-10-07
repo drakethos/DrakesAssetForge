@@ -48,6 +48,13 @@ public sealed partial class PublishViewModel : ObservableObject
     [ObservableProperty] private string _codeFolder = "";
     [ObservableProperty] private bool _intoExisting;
     [ObservableProperty] private bool _building;
+    // Plain C# options
+    /// <summary>Call DrakeModsLibs.Forge instead of writing a helper file next to the items.</summary>
+    [ObservableProperty] private bool _plainUseLibs;
+    /// <summary>Images inside the DLL (safe when mod managers flatten folders).</summary>
+    [ObservableProperty] private bool _plainEmbed = true;
+    /// <summary>Only the looks; your mod registers the items itself.</summary>
+    [ObservableProperty] private bool _plainLookOnly;
 
     public bool Dirty { get; set; }
     public bool OutputZip => Output == "zip";
@@ -319,7 +326,8 @@ public sealed partial class PublishViewModel : ObservableObject
                 CodeLog.Add("Reading the game's scripts…");
                 var types = await LiteTypeInfo.LoadAsync(pack.Recipes, vanilla.InspectAsync, vanilla.ComponentDefaultsAsync);
                 CodeLog.Clear();
-                result = LiteCodeWriter.Write(pack, CodeFolder, IntoExisting, types, _main.CurrentPushTarget, vanilla.Catalog.Install.Root);
+                result = LiteCodeWriter.Write(pack, CodeFolder, IntoExisting, types, _main.CurrentPushTarget, vanilla.Catalog.Install.Root,
+                    new LiteOptions { UseLibs = PlainUseLibs, Embed = PlainEmbed, LookOnly = PlainLookOnly && IntoExisting });
             }
             else
             {

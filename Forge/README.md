@@ -58,7 +58,31 @@ Publish › **Plain C#** instead writes each item as straight-line Jotunn code (
 assignments, materials, sprites, fire colours, snap points) plus one helper (`Lite\ForgeLite.g.cs`) and the images in
 `Assets\`. No Forge and no pack files; Jotunn is the only dependency. `Customize\<Item>.cs` gets `OnBuilt(GameObject prefab)`.
 
-Headless: `DrakesAssetForge export-code <pack folder> <output folder> [--plain]`.
+Plain C# options (Publish checkboxes, or CLI flags):
+
+| Option | Flag | What it does |
+|---|---|---|
+| Images inside the DLL | `--embed` | images become embedded resources; nothing to lose when Hexium/Gale flatten folders |
+| Use DrakeModsLibs helpers | `--libs` | generated code calls `DrakeModsLibs.Forge` (Libs 0.10+) instead of writing `Lite\ForgeLite.g.cs` |
+| Looks only | `--look-only` | for mods that register items themselves: per recipe `Build(parent, scale)` (sprites), `Dress(prefab)` (materials, mesh, settings…), `Icon` |
+| | `--namespace N`, `--folder sub/dir` | namespace of the generated code; write it under a subfolder of the project |
+
+RenameIt's paper is the reference use: `DrakesRenameIt/Forge/Paper` (the pack) generates `Paper/Generated` with
+`--look-only --libs --embed --into`.
+
+## Command line
+
+```
+DrakesAssetForge inspect <prefab> [--json]          scripts, materials, snap points, size, lights
+DrakesAssetForge validate <pack folder>             recipe problems, missing files, unknown bases
+DrakesAssetForge render <pack> <id> <out.png> [--yaw deg --pitch deg --size px --worn]
+DrakesAssetForge new-pack <folder> <id> <name> <author>
+DrakesAssetForge export-code <pack> <out> [--plain] [--libs] [--embed] [--look-only] [--into] [--namespace N] [--folder dir]
+DrakesAssetForge screenshot <folder>
+```
+
+These read Valheim the same way the app does, so packs can be written as JSON by hand or by a script, checked, and
+previewed without opening the UI.
 
 ## Pack layout
 

@@ -8,6 +8,8 @@ Two things release from this repo, each with its own version and tag:
 ## App: unreleased
 
 - Pack list: **Duplicate** (Ctrl+D), **Copy** (Ctrl+C) and **Paste** (Ctrl+V), also on right-click. Copies get a free id (`_copy`, `_copy2`…); a reskin's copy becomes its own item or piece. Paste works across packs and brings the item's images along.
+- Command line: `inspect`, `validate`, `render` (preview PNG), `new-pack`, and `export-code` flags, so packs can be made and checked without the UI.
+- Plain C# export: **Images inside the DLL** (flatten-proof), **Use DrakeModsLibs helpers** (Libs 0.10 `DrakeModsLibs.Forge`), and **Looks only** for mods that register their own items (RenameIt's paper uses all three).
 - Sprite sizes and positions no longer show float noise (0.6000000238) after reopening.
 
 ## App 0.2.0

@@ -1,0 +1,251 @@
+name: Release
+
+# One repo, two release trains, picked by tag:
+#   app-v1.2.3      → Drakes Asset Forge (desktop app), self-contained win-x64 zip → GitHub Release
+#   runtime-v1.2.3  → Drakes Forge Runtime (BepInEx mod) Thunderstore zip → GitHub Release,
+#                     then Thunderstore / Hexium only when the repo variables PUBLISH_THUNDERSTORE / PUBLISH_HEXIUM are 'true'.
+# The tag's version must equal <Version> in the project file.
+
+on:
+  push:
+    tags:
+      - "app-v*.*.*"
+      - "runtime-v*.*.*"
+
+permissions:
+  contents: write
+
+env:
+  PFHOENIX_VERSION: "1.0.23"
+  JOTUNN_VERSION: "2.30.2"
+  BEPINEXPACK: "denikson-BepInExPack_Valheim-5.4.2351"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Format tests
+        run: dotnet test Forge/Format.Tests/Forge.Format.Tests.csproj -c Release
+
+  # ── Desktop app ──────────────────────────────────────────────────────────────
+  app:
+    if: startsWith(github.ref_name, 'app-v')
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Check version
+        id: ver
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^app-v', ''
+          $project = [regex]::Match((Get-Content Forge/App/Forge.App.csproj -Raw), '<Version>([^<]+)</Version>').Groups[1].Value
+          if ($version -ne $project) { Write-Error "Tag ${{ github.ref_name }} doesn't match Forge.App.csproj <Version>$project</Version>"; exit 1 }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Stage game references (Pfhoenix + Jotunn)
+        run: ./.github/scripts/stage-refs.ps1
+
+      # The app bundles Forge Runtime (Settings → Install Forge Runtime) and its source (C# mod export).
+      - name: Build Forge Runtime
+        run: dotnet build Forge/Runtime/Forge.Runtime.csproj -c Release -p:ForgeRefsDir="$env:FORGE_REFS"
+
+      - name: Publish app
+        run: |
+          dotnet publish Forge/App/Forge.App.csproj -c Release -r win-x64 --self-contained `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=None -p:DebugSymbols=false -o dist/app
+          Get-ChildItem dist/app -Recurse -Filter *.pdb | Remove-Item
+          if (-not (Test-Path dist/app/runtime/DrakesForgeRuntime.dll)) { Write-Error "Forge Runtime wasn't bundled"; exit 1 }
+          Copy-Item README.md, LICENSE, CHANGELOG.md dist/app/
+
+      - name: Zip
+        id: zip
+        run: |
+          $name = "DrakesAssetForge-${{ steps.ver.outputs.version }}-win-x64"
+          python -c "import shutil; shutil.make_archive('$name', 'zip', 'dist/app')"
+          "zip=$name.zip" >> $env:GITHUB_OUTPUT
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Drakes Asset Forge ${{ steps.ver.outputs.version }}"
+          make_latest: "true"
+          files: ${{ steps.zip.outputs.zip }}
+          body: |
+            ## Drakes Asset Forge ${{ steps.ver.outputs.version }}
+
+            Make Valheim items, build pieces and reskins without Unity. Windows, no .NET install needed.
+
+            **Download** `${{ steps.zip.outputs.zip }}`, unzip anywhere, run `DrakesAssetForge.exe`.
+            You need Valheim installed and a mod-manager profile with BepInEx + Jotunn to test in;
+            ⚙ Settings can install Forge Runtime into it.
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md).
+
+  # ── Forge Runtime (BepInEx mod) ──────────────────────────────────────────────
+  runtime:
+    if: startsWith(github.ref_name, 'runtime-v')
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      zip: ${{ steps.pkg.outputs.zip }}
+      description: ${{ steps.pkg.outputs.description }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Check version
+        id: ver
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^runtime-v', ''
+          $project = [regex]::Match((Get-Content Forge/Runtime/Forge.Runtime.csproj -Raw), '<Version>([^<]+)</Version>').Groups[1].Value
+          $plugin = [regex]::Match((Get-Content Forge/Runtime/ForgeRuntimePlugin.cs -Raw), 'Version = "([^"]+)"').Groups[1].Value
+          if ($version -ne $project -or $version -ne $plugin) {
+            Write-Error "Tag ${{ github.ref_name }} must match Forge.Runtime.csproj ($project) and ForgeRuntimePlugin.Version ($plugin)"; exit 1
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Stage game references (Pfhoenix + Jotunn)
+        run: ./.github/scripts/stage-refs.ps1
+
+      - name: Build
+        run: dotnet build Forge/Runtime/Forge.Runtime.csproj -c Release -p:ForgeRefsDir="$env:FORGE_REFS"
+
+      - name: Thunderstore package
+        id: pkg
+        run: |
+          $version = "${{ steps.ver.outputs.version }}"
+          $description = "Loads Forge packs: Valheim items, pieces and reskins made with Drakes Asset Forge, built from your own game files. No asset bundles."
+          New-Item -ItemType Directory -Force pkg | Out-Null
+          Copy-Item Forge/Runtime/bin/Release/DrakesForgeRuntime.dll pkg/
+          Copy-Item Forge/Runtime/thunderstore/README.md, Forge/Runtime/thunderstore/CHANGELOG.md, Forge/Runtime/thunderstore/icon.png pkg/
+          [ordered]@{
+            name = "DrakesForgeRuntime"
+            version_number = $version
+            website_url = "https://github.com/${{ github.repository }}"
+            description = $description
+            dependencies = @("$env:BEPINEXPACK", "ValheimModding-Jotunn-$env:JOTUNN_VERSION")
+          } | ConvertTo-Json | Set-Content pkg/manifest.json -Encoding utf8NoBOM
+          $zip = "DrakeMods-DrakesForgeRuntime-$version.zip"
+          python -c "import shutil; shutil.make_archive('DrakeMods-DrakesForgeRuntime-$version', 'zip', 'pkg')"
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          "description=$description" >> $env:GITHUB_OUTPUT
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Drakes Forge Runtime ${{ steps.ver.outputs.version }}"
+          make_latest: "false"
+          files: ${{ steps.pkg.outputs.zip }}
+          body: |
+            ## Drakes Forge Runtime ${{ steps.ver.outputs.version }}
+
+            The BepInEx mod that loads Forge data packs. Requires Jotunn.
+
+            Import the zip in **Gale**, **r2modman** or **Thunderstore Mod Manager** ("Import local mod"),
+            or extract into `BepInEx/plugins/DrakeMods-DrakesForgeRuntime/`.
+
+            See [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/Forge/Runtime/thunderstore/CHANGELOG.md).
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-zip
+          path: ${{ steps.pkg.outputs.zip }}
+          if-no-files-found: error
+
+  publish-thunderstore:
+    needs: runtime
+    if: vars.PUBLISH_THUNDERSTORE == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: runtime-zip
+          path: dist
+      - name: Publish to Thunderstore
+        uses: GreenTF/upload-thunderstore-package@v4.3
+        with:
+          namespace: DrakeMods
+          name: DrakesForgeRuntime
+          version: ${{ needs.runtime.outputs.version }}
+          description: ${{ needs.runtime.outputs.description }}
+          community: valheim
+          repo: https://thunderstore.io/c/valheim/
+          token: ${{ secrets.THUNDERSTORE_TOKEN }}
+          file: ${{ needs.runtime.outputs.zip }}
+          path: dist
+          website: https://github.com/${{ github.repository }}
+          categories: |
+            libraries
+
+  publish-hexium:
+    needs: runtime
+    if: vars.PUBLISH_HEXIUM == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: runtime-zip
+          path: dist
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install tcli
+        run: dotnet tool install -g tcli
+      - name: Publish to Hexium
+        env:
+          VERSION: ${{ needs.runtime.outputs.version }}
+          DESCRIPTION: ${{ needs.runtime.outputs.description }}
+          ZIP_NAME: ${{ needs.runtime.outputs.zip }}
+          HEXIUM_TOKEN: ${{ secrets.HEXIUM_TOKEN }}
+          WEBSITE_URL: https://github.com/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HEXIUM_TOKEN}" ]; then
+            echo "::error::HEXIUM_TOKEN secret is not set" >&2
+            exit 1
+          fi
+          DESC_ESC=$(printf '%s' "$DESCRIPTION" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read())[1:-1])')
+          # Check Hexium's category names before enabling PUBLISH_HEXIUM.
+          cat > thunderstore.toml <<EOF
+          [config]
+          schemaVersion = "0.0.1"
+
+          [package]
+          namespace = "DrakeMods"
+          name = "DrakesForgeRuntime"
+          versionNumber = "${VERSION}"
+          description = "${DESC_ESC}"
+          websiteUrl = "${WEBSITE_URL}"
+          containsNsfwContent = false
+
+          [publish]
+          repository = "https://valheim.hexium.gg"
+          communities = ["valheim"]
+
+          [publish.categories]
+          valheim = ["Libraries", "Valheim 1.0"]
+          EOF
+          sed -i 's/^          //' thunderstore.toml
+          cat thunderstore.toml
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          tcli publish --config-path thunderstore.toml --file "dist/${ZIP_NAME}" --token "${HEXIUM_TOKEN}"

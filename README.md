@@ -1,75 +1,87 @@
 # Drakes Asset Forge
 
-Drakes Asset Forge is a tool for Valheim asset creation. **No bulk SoftRef/Valheim ripping** — spy Catalog data, clone a donor, attach your own (or imported/modified) art, then Export a Jotunn mod.
+Make Valheim items, build pieces and reskins **without Unity**: browse the game, pick a starting point, restyle it,
+change its stats, and push it straight into your game while it's running.
 
-**Current release: `0.2.0`** — Catalog + Project + art export / folder packs work; full auto mod scaffolding (CHUNKS C3) and polish still ahead. Expect rough edges.
+Packs never contain Valheim's models or textures. Meshes and materials are borrowed **by name** from the player's own
+install when the game loads, so a pack is a few small text files plus whatever PNGs you made.
 
-Repo: [drakethos/DrakesAssetForge](https://github.com/drakethos/DrakesAssetForge)
+![Browse Valheim](docs/screenshots/1-browse.png)
 
-## Run (from this folder)
+## What you can do
 
-```powershell
-dotnet run --project DrakeAssetForge.csproj
+- **Browse Valheim**: every item and build piece in your install with a real 3D preview, its materials and shaders,
+  its icon, its components and its vanilla build cost. Add what you want to work from to a working list.
+- **Import**: each one becomes a *new item* (its own ID, copies the vanilla cost), a *reskin* (changes the vanilla
+  one everywhere), or a *source* to borrow meshes and materials from.
+- **Restyle**: borrow any prefab's mesh or material from a visual picker, tint with a colour picker, gloss/metallic,
+  replace or export any texture slot (normal maps too), render an icon from the viewport.
+  Armour shows as worn, including the textures it paints onto the player's body.
+- **Change anything**: every setting on the base's scripts (ItemDrop, Piece, WearNTear, Door, Container…) with its
+  vanilla value, proper controls (dropdowns for enums, toggles, colours), search, and one-click reset. Costs, crafting
+  station, hammer tab, snap points, and a glow light.
+- **Push to game**: installs the pack into your Gale / r2modman / Thunderstore Mod Manager profile and hot-reloads it
+  while Valheim runs.
+- **Publish** as either:
+  - a **data pack**: a Thunderstore-ready zip (README, CHANGELOG, icon made from your items) that needs
+    [Forge Runtime](#forge-runtime), or
+  - a **C# mod project**: Forge compiled into your own mod (no runtime dependency) with a `Customize\<Item>.cs` file
+    per item for your own code. Re-export any time; your code is kept.
+
+| | |
+|---|---|
+| ![Workspace](docs/screenshots/3-workspace-look.png) | ![Components](docs/screenshots/3d-components.png) |
+| ![Material picker](docs/screenshots/3f-material-picker.png) | ![Armour body textures](docs/screenshots/5b-dress-body.png) |
+| ![Publish](docs/screenshots/4-publish.png) | ![Settings](docs/screenshots/6-settings.png) |
+
+## Get it
+
+Download **`DrakesAssetForge-<version>-win-x64.zip`** from [Releases](https://github.com/drakethos/DrakesAssetForge/releases),
+unzip anywhere, run `DrakesAssetForge.exe`. No .NET install needed.
+
+You need Valheim installed (the app reads it; it never changes it) and a mod-manager profile with BepInEx and
+Jotunn to test in. ⚙ Settings can install Forge Runtime into that profile for you.
+
+## Forge Runtime
+
+The small (≈80 KB) BepInEx mod that loads data packs. Players install it once, plus any packs.
+Releases are attached to `runtime-v*` [releases](https://github.com/drakethos/DrakesAssetForge/releases);
+details in [Forge/Runtime/thunderstore/README.md](Forge/Runtime/thunderstore/README.md).
+
+## Build from source
+
+```
+dotnet run --project Forge/App            # the app
+dotnet build Forge/Forge.slnx             # everything
+dotnet test Forge/Format.Tests
 ```
 
-Or from the DrakesWorkshop suite checkout (sibling folder):
+Building `Forge/Runtime` needs game references: locally from `environment.props` (Valheim path + your mod profile;
+see [Forge/README.md](Forge/README.md)), in CI from the Pfhoenix reference package + Jotunn (`-p:ForgeRefsDir=…`).
 
-```powershell
-dotnet run --project DrakesAssetForge
-```
+| Folder | |
+|---|---|
+| `Forge/App` | the desktop app (Avalonia) |
+| `Forge/Valheim` | reads the player's install: catalog, meshes, materials, icons, component fields; software renderer |
+| `Forge/Format` | pack/recipe format (no dependencies), shared by app and runtime |
+| `Forge/Runtime` | Forge Runtime (BepInEx), also compiled into C# mod exports |
+| `Forge/samples` | example pack |
+| `legacy/` | the previous Catalog/Project/Export app, kept for reference (not built) |
 
-Valheim path auto-fills from suite `environment.props` (`ValheimGamePath`) when present.
+Format, recipe keys and the C# export layout: [Forge/README.md](Forge/README.md).
 
-## Workflow
+## Releasing
 
-```
-Catalog (SoftRef spy) → Project (edit) → Import other mods to rework (optional) → Export
-```
+One workflow, two release trains, picked by tag (version must match the project file):
 
-**Export** = make `art.bundle` for checked items (extract imported prefabs / compile FBX as needed) **then** wire `Assets/Items` + `ArtItemHooks.g.cs` into the code project.
+| Tag | Builds | Publishes |
+|---|---|---|
+| `app-v0.1.0` | `Forge/App` self-contained win-x64 (with Forge Runtime + source bundled) | GitHub Release |
+| `runtime-v0.1.0` | `Forge/Runtime` Thunderstore package | GitHub Release; Thunderstore and Hexium only when enabled |
 
-Imported or user-modified prefabs/FBX/skins **are** shippable content. SoftRef catalog meshes are never bulk-dumped into bundles. Pure donor + script items with no custom art still Export hooks/`item.json` only.
-
-### Export selection
-
-On **Export**, check folders/items (folder check cascades; individuals override). **Select all / none**, or **Use Project selection**. Unchecked items are removed from the mod on the next Export.
-
-### Projects
-
-- **File → New / Open / Save Project As…** — folder with `project.json` + `Items/`
-- **Export / Import Project Package…** — `.daf` zip of the project tree
-- Last opened project is remembered in `%LocalAppData%/DrakeAssetForge/settings.json`
-
-### Import bundles / old mods
-
-Import is for **inspecting and reworking** other mods (or your own old bundles) — not the ship step.
-
-- **Import Asset Bundle…** — pick Unity bundles (including **extensionless** SoftRef/mod files)
-- **Import Mod Assets Folder…** — open a mod `Assets/` folder (e.g. `…/DrakeMods-LockSmith/Assets` with `ploam` / `drake`) and pull every UnityFS bundle
-- **Import Mod Items Folder…** — open a synced `Assets/Items` tree (`item.json` + optional `art.bundle`)
-- Multi-prefab bundles land as `bundle(needs extract)`; **Export** (or File → Extract) uses Unity to pack each into a standard `art` prefab bundle
-
-Vanilla SoftRef **names** are skipped on import so Catalog bulk does not flood the project. Once an item is owned (imported mod prefab or attached FBX), Export (re)bundles it.
-
-## Making art.bundles
-
-Needs a Unity 6 editor close to Valheim's version (`valheim_Data/boot.config`). Set Unity on the Export screen.
-
-- Attached FBX → Export compiles into `art.bundle`
-- Imported multi-prefab → Export extracts named prefab into `art.bundle`
-- Imported single-prefab / prior compile → Export ships the existing `art.bundle`
-- **Rebuild selected art.bundle** force-recompiles the Project selection’s FBX (then run Export to wire)
-
-## Phase C1 (in-game smoke)
-
-Build and launch with Jotunn on the `drakeTest` profile:
-
-```powershell
-dotnet build DrakesAssetForge\Smoke\DrakesAssetForgeSmoke.csproj -c Debug
-```
-
-The build copies `DrakesAssetForgeSmoke.dll` into the profile plugins folder. In Valheim: `spawn <owned item id>` (from the Project list). See [CHUNKS.md](CHUNKS.md).
+Store uploads are off until you turn them on with repository variables `PUBLISH_THUNDERSTORE=true` /
+`PUBLISH_HEXIUM=true` (secrets `THUNDERSTORE_TOKEN`, `HEXIUM_TOKEN`).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).

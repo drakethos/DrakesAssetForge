@@ -1,16 +1,16 @@
 # Changelog
 
-## 0.2.0
+Two things release from this repo, each with its own version and tag:
 
-First tagged tool release after CHUNKS A–C2b (Catalog spy, Project edit, Unity art compile, folder export / wire).
+- **Drakes Asset Forge** (the desktop app): tags `app-v*`
+- **Drakes Forge Runtime** (the BepInEx mod packs need): tags `runtime-v*`, changelog in [Forge/Runtime/thunderstore/CHANGELOG.md](Forge/Runtime/thunderstore/CHANGELOG.md)
 
-- Folder-first export and project packaging for Valheim mods
-- `repack-literal` CLI: one-for-one UnityFS subset, slim `.resS`, MasterKey NurbsPath strip, **always strip MonoBehaviour/MonoScript** (visual-only art packs)
-- Unity `ArtBundleBuilder` visual-only prefab extract / folder pack
-- Smoke plugin + in-game art load path
+## App 0.1.0
 
-**Not in 0.2:** CHUNKS C3 (generate full Jotunn mod from scratch), Catalog 3D SoftRef preview, material look-preview polish.
+First release of the rewritten app (the earlier Catalog/Project/Export tool lives in `legacy/`).
 
-## 0.1.x
-
-Unreleased scaffold / early Catalog–Project work (Smoke was labeled 0.1.0).
+- Browse every Valheim item and piece with a real 3D preview, materials and shaders, icons, components and build cost, read straight from your install.
+- Import wizard: new item, reskin, or source-only; new pieces copy the vanilla build cost.
+- Workspace: borrow meshes and materials with a visual picker, tint with a colour picker, per-texture-slot replace/export, worn view and body textures for armour, every component setting editable with vanilla values and reset, recipe, snap points, glow.
+- Push to game: installs the pack unzipped into a chosen Gale / r2modman / Thunderstore Mod Manager profile; hot-reloads while playing.
+- Publish: Thunderstore-ready data pack zip (README, CHANGELOG, icon made from your items), or a C# mod project with Forge compiled in and a Customize file per item for your own code.

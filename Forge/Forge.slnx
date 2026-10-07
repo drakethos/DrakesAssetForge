@@ -1,0 +1,20 @@
+<Solution>
+  <Folder Name="/App/">
+    <Project Path="App/Forge.App.csproj" />
+  </Folder>
+  <Folder Name="/Format.Tests/">
+    <Project Path="Format.Tests/Forge.Format.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Format/">
+    <Project Path="Format/Forge.Format.csproj" />
+  </Folder>
+  <Folder Name="/Probe/">
+    <Project Path="Probe/Forge.Probe.csproj" />
+  </Folder>
+  <Folder Name="/Runtime/">
+    <Project Path="Runtime/Forge.Runtime.csproj" />
+  </Folder>
+  <Folder Name="/Valheim/">
+    <Project Path="Valheim/Forge.Valheim.csproj" />
+  </Folder>
+</Solution>

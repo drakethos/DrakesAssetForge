@@ -1,0 +1,184 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DrakesForge.App.ViewModels"
+             xmlns:views="using:DrakesForge.App.Views"
+             x:Class="DrakesForge.App.Views.BrowseView"
+             x:DataType="vm:BrowseViewModel">
+
+    <Grid ColumnDefinitions="200,*,1.25*,270">
+        <!-- Categories -->
+        <Border Classes="panel" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
+            <ListBox ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}" Margin="6,10">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CategoryOption">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="{Binding Label}" Classes.h="{Binding IsHeader}" Margin="{Binding IsHeader, Converter={x:Static views:Converters.HeaderMargin}}" />
+                            <TextBlock Grid.Column="1" Text="{Binding CountText}" Classes="mono" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <!-- Results -->
+        <DockPanel Grid.Column="1" Margin="14,12,10,0">
+            <StackPanel DockPanel.Dock="Top" Spacing="6">
+                <TextBox Text="{Binding Search}" PlaceholderText="Search prefabs: gate, bronze, chest…" />
+                <TextBlock Text="{Binding ResultNote}" Classes="muted" />
+            </StackPanel>
+            <ListBox ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}" Margin="0,8,0,0">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.Styles>
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Margin" Value="0,0,8,8" />
+                    </Style>
+                    <Style Selector="ListBoxItem:selected Border.tile">
+                        <Setter Property="BorderBrush" Value="#7FB2E5" />
+                    </Style>
+                </ListBox.Styles>
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:VanillaTile">
+                        <Border Classes="tile" Width="128" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource LineBrush}"
+                                BorderThickness="1" CornerRadius="8" Padding="8">
+                            <Grid RowDefinitions="Auto,Auto,Auto">
+                                <Border Height="72" CornerRadius="6" Background="{StaticResource BgBrush}">
+                                    <Image Source="{Binding Icon}" Width="56" Height="56" />
+                                </Border>
+                                <Button Classes="small" Content="{Binding ToggleGlyph}" Command="{Binding ToggleCommand}"
+                                        HorizontalAlignment="Right" VerticalAlignment="Top" Padding="7,1" Margin="0,2,2,0"
+                                        Classes.primary="{Binding InList}" ToolTip.Tip="Add to / remove from working list" />
+                                <TextBlock Grid.Row="1" Text="{Binding Name}" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" FontWeight="Medium" />
+                                <TextBlock Grid.Row="2" Text="{Binding Subtitle}" Classes="mono" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+
+        <!-- Preview -->
+        <Border Grid.Column="2" Background="{StaticResource ViewportBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1,0,1,0">
+            <DockPanel DataContext="{Binding Preview}" x:DataType="vm:VanillaPreviewViewModel" IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="16,12">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Subtitle}" Classes="mono" />
+                    </StackPanel>
+                    <Border Grid.Column="1" Classes="seg" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Classes="seg" Content="Model" GroupName="pm" IsChecked="{Binding ModeModel, Mode=OneWay}"
+                                         Command="{Binding $parent[UserControl].((vm:BrowseViewModel)DataContext).SetModeCommand}" CommandParameter="Model" />
+                            <RadioButton Classes="seg" Content="Materials &amp; shaders" GroupName="pm" IsChecked="{Binding ModeMaterials, Mode=OneWay}"
+                                         Command="{Binding $parent[UserControl].((vm:BrowseViewModel)DataContext).SetModeCommand}" CommandParameter="Materials" />
+                            <RadioButton Classes="seg" Content="Icon" GroupName="pm" IsChecked="{Binding ModeIcon, Mode=OneWay}"
+                                         Command="{Binding $parent[UserControl].((vm:BrowseViewModel)DataContext).SetModeCommand}" CommandParameter="Icon" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <Border DockPanel.Dock="Bottom" Classes="card" Margin="16" Padding="14">
+                    <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
+                        <TextBlock Text="Components" Classes="muted" />
+                        <TextBlock Grid.Column="1" Text="{Binding Scripts}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="1" Text="Build cost" Classes="muted" />
+                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Cost}" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="2" Text="Model" Classes="muted" />
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Stats}" />
+                    </Grid>
+                </Border>
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding Error}" Foreground="{StaticResource WarnBrush}" Margin="16,0" TextWrapping="Wrap"
+                           IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                <Panel>
+                    <Grid IsVisible="{Binding ModeModel}" RowDefinitions="*,Auto">
+                        <views:ModelViewport Parts="{Binding Parts}" Look="{Binding Look}" Markers="{Binding Markers}" Margin="16,0" />
+                        <TextBlock Grid.Row="1" Margin="16,6" Classes="muted"
+                                   Text="Drag to orbit · wheel to zoom · double-click to reset · blue dots are snap points. Shading is approximate; Push to game shows the real shaders." />
+                    </Grid>
+
+                    <ScrollViewer IsVisible="{Binding ModeMaterials}" Margin="16,0">
+                        <ItemsControl ItemsSource="{Binding Materials}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:MaterialRow">
+                                    <Border Classes="card" Margin="0,0,0,10" Padding="12">
+                                        <Grid ColumnDefinitions="72,*" ColumnSpacing="14">
+                                            <Panel Width="72" Height="72">
+                                                <Ellipse Fill="{Binding Swatch}" />
+                                                <Image Source="{Binding Albedo}" Stretch="UniformToFill">
+                                                    <Image.Clip><EllipseGeometry Rect="0,0,72,72" /></Image.Clip>
+                                                </Image>
+                                            </Panel>
+                                            <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock Text="Shader" Classes="muted" />
+                                                    <TextBlock Text="{Binding Shader}" Classes="mono" Foreground="#C3B4F2" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock Text="Texture" Classes="muted" />
+                                                    <TextBlock Text="{Binding Texture}" Classes="mono" />
+                                                    <TextBlock Text="{Binding Slots, StringFormat=· {0} slot(s)}" Classes="mono" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <StackPanel IsVisible="{Binding ModeIcon}" Orientation="Horizontal" Spacing="24" Margin="24" VerticalAlignment="Top">
+                        <Border Width="128" Height="128" CornerRadius="10" Background="{StaticResource PanelBrush}">
+                            <Image Source="{Binding Icon}" Width="112" Height="112" />
+                        </Border>
+                        <Border Width="64" Height="64" CornerRadius="8" Background="{StaticResource PanelBrush}" VerticalAlignment="Bottom">
+                            <Image Source="{Binding Icon}" Width="56" Height="56" />
+                        </Border>
+                        <Border Width="36" Height="36" CornerRadius="5" Background="{StaticResource PanelBrush}" VerticalAlignment="Bottom">
+                            <Image Source="{Binding Icon}" Width="30" Height="30" />
+                        </Border>
+                    </StackPanel>
+
+                    <TextBlock Text="Reading from Valheim…" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Loading}" />
+                </Panel>
+            </DockPanel>
+        </Border>
+
+        <!-- Working list -->
+        <Border Grid.Column="3" Classes="panel">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="14,14,14,8" Spacing="2">
+                    <TextBlock Text="Working list" FontWeight="SemiBold" FontSize="14" />
+                    <TextBlock Classes="muted" Text="Things you want to build from. Nothing is copied yet." />
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Bottom" Margin="14" Spacing="8">
+                    <Button Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                            Content="{Binding ImportLabel}" Command="{Binding StartImportCommand}" IsEnabled="{Binding HasWorkingList}" />
+                    <TextBlock Classes="muted" HorizontalAlignment="Center" Text="You choose what each one becomes next." />
+                </StackPanel>
+                <Grid>
+                    <ItemsControl ItemsSource="{Binding WorkingList}" Margin="10,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:VanillaTile">
+                                <Border Background="{StaticResource Panel2Brush}" CornerRadius="8" Padding="8" Margin="0,0,0,6">
+                                    <Grid ColumnDefinitions="32,*,Auto" ColumnSpacing="10">
+                                        <Image Source="{Binding Icon}" Width="28" Height="28" />
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Subtitle}" Classes="mono" />
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Classes="small ghost" Content="×" Command="{Binding ToggleCommand}" ToolTip.Tip="Remove from list" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Classes="muted" Margin="14" IsVisible="{Binding !HasWorkingList}" Text="Use + on any tile to add it." />
+                </Grid>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

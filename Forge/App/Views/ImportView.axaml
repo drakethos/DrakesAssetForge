@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DrakesForge.App.ViewModels"
+             x:Class="DrakesForge.App.Views.ImportView"
+             x:DataType="vm:ImportViewModel">
+
+    <Grid ColumnDefinitions="*,300">
+        <DockPanel Margin="24,20,20,0">
+            <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,14">
+                <TextBlock Text="{Binding Title}" Classes="title" />
+                <TextBlock Classes="muted" Text="Choose what each one becomes. Everything stays a reference to your Valheim install until you change it." />
+            </StackPanel>
+            <ScrollViewer>
+                <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ImportRow">
+                            <Border Classes="card" Margin="0,0,0,12">
+                                <Grid ColumnDefinitions="230,320,*,Auto" ColumnSpacing="20">
+                                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Top">
+                                        <Border Width="56" Height="56" CornerRadius="8" Background="{StaticResource BgBrush}">
+                                            <Image Source="{Binding Icon}" Width="44" Height="44" />
+                                        </Border>
+                                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="{Binding Entry.Name}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding Subtitle}" Classes="mono" />
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Spacing="6">
+                                        <TextBlock Text="BECOMES" Classes="h" />
+                                        <Border Classes="seg" HorizontalAlignment="Left">
+                                            <StackPanel Orientation="Horizontal">
+                                                <RadioButton Classes="seg ember" Content="New item" IsChecked="{Binding IsNew}" GroupName="{Binding Entry.Name}" />
+                                                <RadioButton Classes="seg ember" Content="Reskin" IsChecked="{Binding IsReskin}" GroupName="{Binding Entry.Name}" />
+                                                <RadioButton Classes="seg ember" Content="Source only" IsChecked="{Binding IsSource}" GroupName="{Binding Entry.Name}" />
+                                            </StackPanel>
+                                        </Border>
+                                        <TextBlock Text="{Binding Help}" Classes="muted" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" Spacing="8">
+                                        <StackPanel Spacing="8" IsVisible="{Binding IsNew}">
+                                            <Grid ColumnDefinitions="80,*" ColumnSpacing="8">
+                                                <TextBlock Text="Name" Classes="muted" VerticalAlignment="Center" />
+                                                <TextBox Grid.Column="1" Text="{Binding Name}" />
+                                            </Grid>
+                                            <Grid ColumnDefinitions="80,*" ColumnSpacing="8">
+                                                <TextBlock Text="Prefab ID" Classes="muted" VerticalAlignment="Center" />
+                                                <TextBox Grid.Column="1" Text="{Binding Id}" FontFamily="{StaticResource MonoFont}" />
+                                            </Grid>
+                                            <CheckBox IsChecked="{Binding CopyCost}" IsVisible="{Binding IsPiece}">
+                                                <TextBlock Text="{Binding CostText, TargetNullValue='Copy build cost from the base'}" TextWrapping="Wrap" />
+                                            </CheckBox>
+                                        </StackPanel>
+                                        <TextBlock IsVisible="{Binding IsReskin}" Classes="muted"
+                                                   Text="{Binding Entry.Name, StringFormat='Keeps the ID {0}. Only the look and icon change.'}" />
+                                        <TextBlock IsVisible="{Binding IsSource}" Classes="muted"
+                                                   Text="Shows under Sources in the workspace, ready to borrow its mesh or materials." />
+                                    </StackPanel>
+
+                                    <Button Grid.Column="3" Classes="small ghost" Content="×" Command="{Binding RemoveCommand}" VerticalAlignment="Top"
+                                            ToolTip.Tip="Leave this one out" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+
+        <Border Grid.Column="1" Classes="panel" BorderBrush="{StaticResource LineBrush}" BorderThickness="1,0,0,0" Padding="20,24">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Bottom" Spacing="8">
+                    <Button Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Import and open workspace"
+                            Command="{Binding ImportAllCommand}" />
+                    <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Back to browser" Command="{Binding BackCommand}" />
+                </StackPanel>
+                <StackPanel Spacing="14">
+                    <TextBlock Text="SUMMARY" Classes="h" />
+                    <TextBlock Text="{Binding Summary}" FontSize="15" />
+                    <Border Background="#16241A" BorderBrush="#2A4A33" BorderThickness="1" CornerRadius="8" Padding="12">
+                        <TextBlock TextWrapping="Wrap" Foreground="#B9E2C3" FontSize="12.5"
+                                   Text="0 Valheim files copied. Models, shaders and icons stay live references and preview straight from your install." />
+                    </Border>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

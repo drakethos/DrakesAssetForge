@@ -1,0 +1,581 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DrakesForge.App.ViewModels"
+             xmlns:views="using:DrakesForge.App.Views"
+             xmlns:valheim="using:DrakesForge.Valheim"
+             x:Class="DrakesForge.App.Views.WorkspaceView"
+             x:DataType="vm:WorkspaceViewModel">
+
+    <UserControl.DataTemplates>
+        <!-- A group of settings: collapsible, shows how many were changed. Children use these same templates. -->
+        <DataTemplate DataType="vm:FieldGroup">
+            <Expander IsExpanded="{Binding IsExpanded}" Margin="0,0,0,6" HorizontalAlignment="Stretch" Padding="10,4,4,6">
+                <Expander.Header>
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding Subtitle}" Classes="mono" VerticalAlignment="Center" />
+                        <Border Grid.Column="2" Classes="tag mine" IsVisible="{Binding HasChanges}"><TextBlock Text="{Binding ChangedText}" /></Border>
+                    </Grid>
+                </Expander.Header>
+                <ItemsControl ItemsSource="{Binding Children}" />
+            </Expander>
+        </DataTemplate>
+
+        <!-- One setting: label, the right editor for its type, vanilla value + reset when changed. -->
+        <DataTemplate DataType="vm:FieldEditor">
+            <Border Padding="2,5" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="*,1.25*,26" ColumnSpacing="8">
+                    <StackPanel VerticalAlignment="Center" ToolTip.Tip="{Binding Tooltip}">
+                        <TextBlock Text="{Binding Label}" TextWrapping="Wrap" Classes.changed="{Binding IsModified}" />
+                        <TextBlock Text="{Binding VanillaText}" Classes="mono" FontSize="10.5" IsVisible="{Binding IsModified}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Panel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBox IsVisible="{Binding IsNumber}" Text="{Binding Text}" Classes.error="{Binding HasError}" />
+                        <TextBox IsVisible="{Binding IsText}" Text="{Binding Text}" />
+                        <ToggleSwitch IsVisible="{Binding IsBool}" IsChecked="{Binding BoolValue}" OnContent="On" OffContent="Off" />
+                        <ComboBox IsVisible="{Binding IsEnum}" ItemsSource="{Binding EnumOptions}" SelectedItem="{Binding EnumValue}" HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="valheim:EnumOption"><TextBlock Text="{Binding Name}" /></DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button IsVisible="{Binding IsFlags}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                            <TextBlock Text="{Binding FlagsSummary}" TextTrimming="CharacterEllipsis" />
+                            <Button.Flyout>
+                                <Flyout>
+                                    <ItemsControl ItemsSource="{Binding Flags}" MinWidth="200">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:FlagOption"><CheckBox Content="{Binding Name}" IsChecked="{Binding IsChecked}" /></DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Flyout>
+                            </Button.Flyout>
+                        </Button>
+                        <Grid IsVisible="{Binding IsColor}" ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                            <views:ColorButton Hex="{Binding ColorHex}" AllowAlpha="True" />
+                            <TextBox Grid.Column="1" Text="{Binding ColorHex}" FontFamily="{StaticResource MonoFont}" />
+                        </Grid>
+                        <Grid IsVisible="{Binding IsVector}" ColumnDefinitions="*,*,*" ColumnSpacing="4">
+                            <TextBox Text="{Binding X}" />
+                            <TextBox Grid.Column="1" Text="{Binding Y}" />
+                            <TextBox Grid.Column="2" Text="{Binding Z}" IsVisible="{Binding IsVector3}" />
+                        </Grid>
+                        <TextBlock IsVisible="{Binding IsReadOnly}" Text="{Binding ReadOnlyText}" Classes="muted" />
+                    </Panel>
+                    <Button Grid.Column="2" Classes="small ghost" Padding="4,2" Content="↺" IsVisible="{Binding IsModified}"
+                            Command="{Binding ResetCommand}" ToolTip.Tip="Back to vanilla" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.changed">
+            <Setter Property="Foreground" Value="{StaticResource EmberTextBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBox.error">
+            <Setter Property="BorderBrush" Value="#C04A3A" />
+        </Style>
+        <Style Selector="Expander">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid>
+    <Grid ColumnDefinitions="270,*,400">
+        <!-- Library -->
+        <Border Classes="panel" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <Border DockPanel.Dock="Top" Classes="seg" Margin="12,12,12,8">
+                    <UniformGrid Columns="3">
+                        <RadioButton Classes="seg" Content="My Pack" GroupName="lib" IsChecked="{Binding LibPack, Mode=OneWay}" Command="{Binding SetLibraryCommand}" CommandParameter="Pack" />
+                        <RadioButton Classes="seg" Content="Sources" GroupName="lib" IsChecked="{Binding LibSources, Mode=OneWay}" Command="{Binding SetLibraryCommand}" CommandParameter="Sources" />
+                        <RadioButton Classes="seg" Content="My Files" GroupName="lib" IsChecked="{Binding LibFiles, Mode=OneWay}" Command="{Binding SetLibraryCommand}" CommandParameter="Files" />
+                    </UniformGrid>
+                </Border>
+                <StackPanel DockPanel.Dock="Bottom" Margin="12" Spacing="6">
+                    <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="+ Add from Valheim" Command="{Binding AddMoreCommand}" />
+                    <Button Classes="small ghost" HorizontalAlignment="Center" Content="Remove selected item" Command="{Binding DeleteSelectedCommand}" />
+                </StackPanel>
+                <Panel>
+                    <ListBox IsVisible="{Binding LibPack}" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected}" Margin="6,0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:PackListItem">
+                                <Grid ColumnDefinitions="34,*" ColumnSpacing="10">
+                                    <Border Width="32" Height="32" CornerRadius="5" Background="{StaticResource Panel2Brush}">
+                                        <Image Source="{Binding Icon}" Width="26" Height="26" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Subtitle}" Classes="mono" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <StackPanel IsVisible="{Binding LibSources}" Margin="12,0" Spacing="6">
+                        <TextBlock Classes="muted" Text="Prefabs kept around to borrow meshes and materials from. They show first in the pickers." />
+                        <ItemsControl ItemsSource="{Binding Sources}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:VanillaTile">
+                                    <Border Background="{StaticResource Panel2Brush}" CornerRadius="8" Padding="8" Margin="0,0,0,6">
+                                        <Grid ColumnDefinitions="30,*,Auto" ColumnSpacing="10">
+                                            <Image Source="{Binding Icon}" Width="26" Height="26" />
+                                            <StackPanel Grid.Column="1">
+                                                <SelectableTextBlock Text="{Binding Name}" />
+                                                <TextBlock Text="{Binding Subtitle}" Classes="mono" />
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Classes="small ghost" Content="×"
+                                                    Command="{Binding $parent[UserControl].((vm:WorkspaceViewModel)DataContext).RemoveSourceCommand}" CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                    <StackPanel IsVisible="{Binding LibFiles}" Margin="12,0" Spacing="6">
+                        <TextBlock Classes="muted" Text="Your files in the pack (textures, icons). These ship with it." />
+                        <ItemsControl ItemsSource="{Binding Files}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Text="{Binding}" Classes="mono" Margin="0,3" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Panel>
+            </DockPanel>
+        </Border>
+
+        <!-- Empty pack -->
+        <StackPanel Grid.Column="1" Grid.ColumnSpan="2" IsVisible="{Binding IsEmpty}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+            <TextBlock Text="This pack is empty" Classes="title" HorizontalAlignment="Center" />
+            <TextBlock Classes="muted" HorizontalAlignment="Center" Text="Browse Valheim, add a few things to your working list, then import them." />
+            <Button Classes="primary" HorizontalAlignment="Center" Content="Browse Valheim" Command="{Binding AddMoreCommand}" />
+        </StackPanel>
+
+        <!-- Viewport -->
+        <DockPanel Grid.Column="1" DataContext="{Binding Editor}" x:DataType="vm:ItemEditorViewModel"
+                   IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}" Background="{StaticResource ViewportBrush}">
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="12,10">
+                <ToggleButton Classes="small" Content="Snap points" IsChecked="{Binding ShowSnapPoints}" IsVisible="{Binding IsPiece}" />
+                <ToggleButton Classes="small" Content="Worn" IsChecked="{Binding ShowWorn}" IsVisible="{Binding HasWornLook}"
+                              ToolTip.Tip="Show it as worn on the player instead of lying on the ground" />
+                <ToggleButton Classes="small" Content="Compare to base" IsChecked="{Binding CompareToBase}" ToolTip.Tip="Show the untouched vanilla prefab" />
+                <Button Classes="small" Content="Render icon from this view" Command="{Binding RenderIconCommand}" CommandParameter="{Binding #Viewport.Camera}" />
+            </StackPanel>
+            <TextBlock DockPanel.Dock="Bottom" Margin="14,6" Classes="muted"
+                       Text="Drag to orbit · wheel to zoom · double-click to reset. Approximate shading; Push to game for the real look." />
+            <views:ModelViewport x:Name="Viewport" Parts="{Binding Parts}" Look="{Binding Look}" Markers="{Binding Markers}" Message="{Binding ViewportMessage}" />
+        </DockPanel>
+
+        <!-- Inspector -->
+        <Border Grid.Column="2" Classes="panel" BorderBrush="{StaticResource LineBrush}" BorderThickness="1,0,0,0"
+                DataContext="{Binding Editor}" x:DataType="vm:ItemEditorViewModel"
+                IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="16,14,16,4" Spacing="6">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBox Text="{Binding Name}" PlaceholderText="{Binding Base}" FontSize="15" FontWeight="SemiBold" IsEnabled="{Binding !IsReskin}" />
+                        <Border Grid.Column="1" Classes="tag mine"><TextBlock Text="{Binding KindLabel}" /></Border>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <SelectableTextBlock Text="{Binding Id}" FontFamily="{StaticResource MonoFont}" FontSize="11.5" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="{Binding Base, StringFormat='based on {0}'}" Classes="muted" />
+                    </StackPanel>
+                    <TextBox Text="{Binding Description}" PlaceholderText="Description (tooltip in game)" IsVisible="{Binding !IsReskin}" />
+                </StackPanel>
+
+                <Border DockPanel.Dock="Top" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1" Padding="16,0">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Classes="tab" Content="Look" GroupName="tabs" IsChecked="{Binding TabLook, Mode=OneWay}" Command="{Binding SetTabCommand}" CommandParameter="Look" />
+                        <RadioButton Classes="tab" Content="Components" GroupName="tabs" IsChecked="{Binding TabComponents, Mode=OneWay}" Command="{Binding SetTabCommand}" CommandParameter="Components" IsVisible="{Binding !IsReskin}" />
+                        <RadioButton Classes="tab" Content="Recipe" GroupName="tabs" IsChecked="{Binding TabRecipe, Mode=OneWay}" Command="{Binding SetTabCommand}" CommandParameter="Recipe" IsVisible="{Binding CanCraft}" />
+                        <RadioButton Classes="tab" Content="Snap" GroupName="tabs" IsChecked="{Binding TabSnap, Mode=OneWay}" Command="{Binding SetTabCommand}" CommandParameter="Snap" IsVisible="{Binding IsPiece}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- COMPONENTS: search + filters pinned, settings scroll -->
+                <Border DockPanel.Dock="Top" Classes="section" IsVisible="{Binding $parent[DockPanel].((vm:ItemEditorViewModel)DataContext).TabComponents}" DataContext="{Binding Components}" x:DataType="vm:ComponentsPanel">
+                    <StackPanel Spacing="8">
+                        <TextBox Text="{Binding Search}" PlaceholderText="Find a setting: durability, slash, health, weight…" />
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
+                            <ToggleButton Classes="small" Content="Changed only" IsChecked="{Binding ChangedOnly}" />
+                            <ToggleButton Grid.Column="1" Classes="small" Content="Show lists &amp; links" IsChecked="{Binding ShowReadOnly}"
+                                          ToolTip.Tip="Also show lists and references to other assets (read-only for now)" />
+                            <Button Grid.Column="3" Classes="small ghost" Content="Reset all" Command="{Binding ResetAllCommand}" />
+                        </Grid>
+                        <TextBlock Text="{Binding Summary}" Classes="muted" />
+                    </StackPanel>
+                </Border>
+
+                <ScrollViewer>
+                    <StackPanel>
+                        <!-- LOOK -->
+                        <StackPanel IsVisible="{Binding TabLook}">
+                            <Border Classes="section">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="MESH" Classes="h" />
+                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                        <Border Classes="chip"><TextBlock Text="{Binding MeshLabel}" TextTrimming="CharacterEllipsis" /></Border>
+                                        <Button Grid.Column="1" Classes="small" Content="Choose…" Command="{Binding ChooseMeshCommand}" />
+                                        <Button Grid.Column="2" Classes="small ghost" Content="Clear" Command="{Binding ClearMeshCommand}" IsVisible="{Binding HasMeshSwap}" />
+                                    </Grid>
+                                    <TextBlock Classes="muted" Text="Keep the base's shape, or show another Valheim prefab's mesh instead." />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="section">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="MATERIALS" Classes="h" />
+                                    <ListBox ItemsSource="{Binding Materials}" SelectedItem="{Binding SelectedMaterial}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:MaterialEditor">
+                                                <Grid ColumnDefinitions="18,*,Auto" ColumnSpacing="10">
+                                                    <Border Width="16" Height="16" CornerRadius="3" Background="{Binding Swatch}" VerticalAlignment="Center" />
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="{Binding Title}" />
+                                                        <TextBlock Text="{Binding Subtitle}" Classes="mono" TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                    <Border Grid.Column="2" Classes="tag mine" IsVisible="{Binding IsModified}"><TextBlock Text="edited" /></Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <TextBlock Classes="muted" Text="The selected material glows orange in the viewport." />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="section" DataContext="{Binding SelectedMaterial}" x:DataType="vm:MaterialEditor"
+                                    IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <StackPanel Spacing="10">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Text="{Binding Title, StringFormat='ADJUST {0}'}" Classes="h" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                        <Button Grid.Column="1" Classes="small ghost" Content="Reset" Command="{Binding ResetCommand}" />
+                                    </Grid>
+
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="Material" Classes="muted" />
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+                                            <Border Width="34" Height="34" CornerRadius="17" ClipToBounds="True" Background="{Binding Swatch}">
+                                                <Image Source="{Binding BorrowedAlbedo}" Stretch="UniformToFill" />
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding BorrowLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            <Button Grid.Column="2" Classes="small" Content="Borrow…" Command="{Binding ChooseBorrowCommand}"
+                                                    ToolTip.Tip="Use the material of any Valheim prefab (its texture, color and shader)" />
+                                            <Button Grid.Column="3" Classes="small ghost" Content="Clear" Command="{Binding ClearBorrowCommand}" IsVisible="{Binding HasBorrow}" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="8">
+                                        <CheckBox Content="Tint" IsChecked="{Binding TintOn}" IsVisible="{Binding CanTint}" />
+                                        <StackPanel Grid.Column="1" Spacing="6" IsVisible="{Binding CanTint}">
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                                <views:ColorButton Hex="{Binding Tint}" />
+                                                <TextBox Grid.Column="1" Text="{Binding Tint}" FontFamily="{StaticResource MonoFont}" />
+                                            </Grid>
+                                            <ItemsControl ItemsSource="{x:Static vm:ItemEditorViewModel.TintPresets}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="x:String">
+                                                        <Button Width="20" Height="20" Padding="0" CornerRadius="4" Background="{Binding Converter={x:Static views:Converters.HexBrush}}"
+                                                                Command="{Binding $parent[ItemsControl].((vm:MaterialEditor)DataContext).SetTintCommand}" CommandParameter="{Binding}"
+                                                                ToolTip.Tip="{Binding}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <CheckBox Grid.Row="1" Content="Gloss" IsChecked="{Binding GlossOn}" IsVisible="{Binding HasGloss}" />
+                                        <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Gloss}" IsEnabled="{Binding GlossOn}" IsVisible="{Binding HasGloss}" />
+
+                                        <CheckBox Grid.Row="2" Content="Metallic" IsChecked="{Binding MetallicOn}" IsVisible="{Binding HasMetallic}" />
+                                        <Slider Grid.Row="2" Grid.Column="1" Minimum="0" Maximum="1" Value="{Binding Metallic}" IsEnabled="{Binding MetallicOn}" IsVisible="{Binding HasMetallic}" />
+
+
+                                    </Grid>
+
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="Textures" Classes="muted" />
+                                        <ItemsControl ItemsSource="{Binding TextureSlots}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:TextureSlotEditor">
+                                                    <Border Background="{StaticResource Panel2Brush}" CornerRadius="8" Padding="8" Margin="0,0,0,6">
+                                                        <Grid ColumnDefinitions="56,*" ColumnSpacing="10">
+                                                            <Border Width="56" Height="56" CornerRadius="6" Background="{StaticResource BgBrush}" ClipToBounds="True">
+                                                                <Image Source="{Binding Thumbnail}" Stretch="Uniform" />
+                                                            </Border>
+                                                            <StackPanel Grid.Column="1" Spacing="4">
+                                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" Classes.changed="{Binding IsCustom}" />
+                                                                    <Border Classes="tag" IsVisible="{Binding IsNormalMap}"><TextBlock Text="normal map" /></Border>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding Detail}" Classes="mono" TextTrimming="CharacterEllipsis" />
+                                                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                    <Button Classes="small" Content="Replace…" Command="{Binding ReplaceCommand}" />
+                                                                    <Button Classes="small" Content="Export" Command="{Binding ExportCommand}" IsVisible="{Binding CanExport}"
+                                                                            ToolTip.Tip="Save the vanilla texture as PNG to paint over, then Replace with your version" />
+                                                                    <Button Classes="small ghost" Content="Clear" Command="{Binding ClearCommand}" IsVisible="{Binding IsCustom}" />
+                                                                </StackPanel>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Classes="section">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="ICON" Classes="h" />
+                                    <StackPanel Orientation="Horizontal" Spacing="12">
+                                        <Border Width="64" Height="64" CornerRadius="8" Background="{StaticResource Panel2Brush}">
+                                            <Image Source="{Binding IconImage}" Width="56" Height="56" />
+                                        </Border>
+                                        <StackPanel Spacing="6" VerticalAlignment="Center">
+                                            <Button Classes="small" Content="Use PNG…" Command="{Binding PickIconCommand}" />
+                                            <Button Classes="small ghost" Content="Back to base icon" Command="{Binding ResetIconCommand}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <TextBlock Classes="muted" Text="Or line up the viewport and use “Render icon from this view”." />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- COMPONENTS -->
+                        <StackPanel IsVisible="{Binding $parent[DockPanel].((vm:ItemEditorViewModel)DataContext).TabComponents}" Margin="12,8,12,12" DataContext="{Binding Components}" x:DataType="vm:ComponentsPanel">
+                            <ItemsControl ItemsSource="{Binding Components}" IsVisible="{Binding !IsFiltering}" />
+                            <ItemsControl ItemsSource="{Binding Results}" IsVisible="{Binding IsFiltering}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FieldEditor">
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding Breadcrumb}" Classes="mono" FontSize="10.5" Margin="2,6,0,0" />
+                                            <ContentControl Content="{Binding}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border Classes="card" Margin="0,12,0,0" Padding="12" IsVisible="{Binding HasOtherOverrides}">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="OTHER OVERRIDES IN THE RECIPE" Classes="h" />
+                                    <TextBlock Classes="muted" Text="Hand-written values for things not listed above. Kept as they are." />
+                                    <ItemsControl ItemsSource="{Binding OtherOverrides}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" Classes="mono" TextWrapping="Wrap" /></DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Classes="small ghost" Content="Remove them" Command="{Binding DropOtherOverridesCommand}" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                        <Border Classes="section" IsVisible="{Binding TabComponents}">
+                            <StackPanel Spacing="10">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Text="GLOW · FORGE BEHAVIOUR" Classes="h" VerticalAlignment="Center" />
+                                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding GlowOn}" OnContent="" OffContent="" />
+                                </Grid>
+                                <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8" IsEnabled="{Binding GlowOn}">
+                                    <TextBlock Text="Color" Classes="muted" VerticalAlignment="Center" />
+                                    <Grid Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                                        <views:ColorButton Hex="{Binding GlowColor}" />
+                                        <TextBox Grid.Column="1" Text="{Binding GlowColor}" FontFamily="{StaticResource MonoFont}" />
+                                    </Grid>
+                                    <TextBlock Grid.Row="1" Text="Intensity" Classes="muted" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="4" Value="{Binding GlowIntensity}" />
+                                    <TextBlock Grid.Row="2" Text="Range (m)" Classes="muted" VerticalAlignment="Center" />
+                                    <Slider Grid.Row="2" Grid.Column="1" Minimum="1" Maximum="15" Value="{Binding GlowRange}" />
+                                    <CheckBox Grid.Row="3" Grid.Column="1" Content="Only at night" IsChecked="{Binding GlowNightOnly}" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- RECIPE -->
+                        <StackPanel IsVisible="{Binding TabRecipe}">
+                            <Border Classes="section">
+                                <StackPanel Spacing="10">
+                                    <CheckBox Content="Craftable / buildable" IsChecked="{Binding CraftOn}" />
+                                    <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8" IsEnabled="{Binding CraftOn}">
+                                        <TextBlock Text="Tool" Classes="muted" VerticalAlignment="Center" IsVisible="{Binding IsPiece}" />
+                                        <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:ItemEditorViewModel.Tools}" SelectedItem="{Binding Tool}" HorizontalAlignment="Stretch" IsVisible="{Binding IsPiece}" />
+                                        <TextBlock Grid.Row="1" Text="Hammer tab" Classes="muted" VerticalAlignment="Center" IsVisible="{Binding IsPiece}" />
+                                        <AutoCompleteBox Grid.Row="1" Grid.Column="1" Text="{Binding Category}" ItemsSource="{x:Static vm:ItemEditorViewModel.PieceCategories}"
+                                                         MinimumPrefixLength="0" IsVisible="{Binding IsPiece}" PlaceholderText="Building, or a new tab name" />
+                                        <TextBlock Grid.Row="2" Text="Station" Classes="muted" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{x:Static vm:ItemEditorViewModel.Stations}" SelectedItem="{Binding Station}" HorizontalAlignment="Stretch" />
+                                        <TextBlock Grid.Row="3" Text="Station level" Classes="muted" VerticalAlignment="Center" IsVisible="{Binding IsItem}" />
+                                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding StationLevel}" IsVisible="{Binding IsItem}" Width="70" HorizontalAlignment="Left" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="section" IsEnabled="{Binding CraftOn}">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="COST" Classes="h" />
+                                    <ItemsControl ItemsSource="{Binding Requirements}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:RequirementRow">
+                                                <Grid ColumnDefinitions="*,60,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,4">
+                                                    <AutoCompleteBox Text="{Binding Item}" FilterMode="ContainsOrdinal" MinimumPrefixLength="1" PlaceholderText="Item (Bronze)"
+                                                                     ItemsSource="{Binding $parent[ItemsControl].((vm:ItemEditorViewModel)DataContext).ItemNames}" />
+                                                    <TextBox Grid.Column="1" Text="{Binding Amount}" />
+                                                    <CheckBox Grid.Column="2" Content="refund" IsChecked="{Binding Recover}" FontSize="12" />
+                                                    <Button Grid.Column="3" Classes="small ghost" Content="×" Command="{Binding RemoveCommand}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <Button Classes="small" Content="+ Add resource" Command="{Binding AddRequirementCommand}" HorizontalAlignment="Left" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- SNAP -->
+                        <StackPanel IsVisible="{Binding TabSnap}">
+                            <Border Classes="section">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="SNAP POINTS" Classes="h" />
+                                    <Grid ColumnDefinitions="110,*">
+                                        <TextBlock Text="Mode" Classes="muted" VerticalAlignment="Center" />
+                                        <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:ItemEditorViewModel.SnapModes}" SelectedItem="{Binding SnapMode}" HorizontalAlignment="Stretch" />
+                                    </Grid>
+                                    <TextBlock Classes="muted" Text="keep = the base's points · add = base's plus yours · replace = only yours. Blue dots are the base's, orange are yours." />
+                                    <TextBlock Classes="muted" Text="{Binding BaseSnapText}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Button Classes="small" Content="Copy base points" Command="{Binding CopyBaseSnapPointsCommand}" />
+                                        <Button Classes="small" Content="+ Add point" Command="{Binding AddSnapPointCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                            <Border Classes="section">
+                                <StackPanel Spacing="4">
+                                    <Grid ColumnDefinitions="*,*,*,Auto" ColumnSpacing="6">
+                                        <TextBlock Text="X" Classes="muted" />
+                                        <TextBlock Grid.Column="1" Text="Y (up)" Classes="muted" />
+                                        <TextBlock Grid.Column="2" Text="Z" Classes="muted" />
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding SnapPoints}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:SnapRow">
+                                                <Grid ColumnDefinitions="*,*,*,Auto" ColumnSpacing="6" Margin="0,0,0,4">
+                                                    <TextBox Text="{Binding X}" />
+                                                    <TextBox Grid.Column="1" Text="{Binding Y}" />
+                                                    <TextBox Grid.Column="2" Text="{Binding Z}" />
+                                                    <Button Grid.Column="3" Classes="small ghost" Content="×" Command="{Binding RemoveCommand}" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Classes="muted" Text="Meters, relative to the piece's origin (the point you place it by)." />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+
+    <!-- Material / mesh picker over everything -->
+    <Border Background="#C0080909" IsVisible="{Binding Picker, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <Border Classes="card" Padding="0" Margin="48,36" MaxWidth="1180" MaxHeight="760" DataContext="{Binding Picker}" x:DataType="vm:AssetPickerViewModel"
+                IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <DockPanel>
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="20,16,20,10">
+                    <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Title}" Classes="title" />
+                        <TextBlock Text="{Binding Hint}" Classes="muted" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="small ghost" Content="✕" Command="{Binding CancelCommand}" VerticalAlignment="Top" />
+                </Grid>
+                <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="20,10,20,16">
+                    <TextBlock Text="{Binding Note}" Classes="muted" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Content="Cancel" Command="{Binding CancelCommand}" />
+                    <Button Grid.Column="2" Classes="primary" Content="{Binding PickLabel}" Command="{Binding PickCommand}" IsEnabled="{Binding CanPick}" />
+                </Grid>
+                <Grid ColumnDefinitions="340,*" Margin="20,0">
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,12,8">
+                            <TextBox Text="{Binding Search}" PlaceholderText="Search: bronze, wood, wolf, stone…" />
+                            <Border Classes="seg">
+                                <UniformGrid Columns="4">
+                                    <RadioButton Classes="seg" Content="Sources" GroupName="ps" IsChecked="{Binding ScopeSources, Mode=OneWay}" Command="{Binding SetScopeCommand}" CommandParameter="Sources" />
+                                    <RadioButton Classes="seg" Content="All" GroupName="ps" IsChecked="{Binding ScopeAll, Mode=OneWay}" Command="{Binding SetScopeCommand}" CommandParameter="All" />
+                                    <RadioButton Classes="seg" Content="Pieces" GroupName="ps" IsChecked="{Binding ScopePieces, Mode=OneWay}" Command="{Binding SetScopeCommand}" CommandParameter="Pieces" />
+                                    <RadioButton Classes="seg" Content="Items" GroupName="ps" IsChecked="{Binding ScopeItems, Mode=OneWay}" Command="{Binding SetScopeCommand}" CommandParameter="Items" />
+                                </UniformGrid>
+                            </Border>
+                        </StackPanel>
+                        <ListBox ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}" Margin="0,0,12,0">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:VanillaTile">
+                                    <Grid ColumnDefinitions="34,*" ColumnSpacing="10">
+                                        <Border Width="32" Height="32" CornerRadius="5" Background="{StaticResource BgBrush}">
+                                            <Image Source="{Binding Icon}" Width="28" Height="28" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" />
+                                            <TextBlock Text="{Binding Subtitle}" Classes="mono" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+
+                    <Border Grid.Column="1" Background="{StaticResource ViewportBrush}" CornerRadius="8" Padding="14">
+                        <Panel>
+                            <TextBlock Text="Pick a prefab on the left." Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       IsVisible="{Binding Preview, Converter={x:Static ObjectConverters.IsNull}}" />
+                            <DockPanel DataContext="{Binding Preview}" x:DataType="vm:VanillaPreviewViewModel"
+                                       IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                    <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding Stats}" Classes="mono" />
+                                </StackPanel>
+                                <Panel>
+                                    <!-- Material mode: its materials as texture balls -->
+                                    <ListBox ItemsSource="{Binding Materials}" IsVisible="{Binding $parent[Border].((vm:AssetPickerViewModel)DataContext).IsMaterialMode}"
+                                             SelectedItem="{Binding $parent[Border].((vm:AssetPickerViewModel)DataContext).SelectedMaterial}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:MaterialRow">
+                                                <Grid ColumnDefinitions="64,*" ColumnSpacing="14" Margin="0,4">
+                                                    <Border Width="64" Height="64" CornerRadius="32" ClipToBounds="True" Background="{Binding Swatch}">
+                                                        <Image Source="{Binding Albedo}" Stretch="UniformToFill" />
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Shader}" Classes="mono" Foreground="#C3B4F2" />
+                                                        <TextBlock Text="{Binding Texture}" Classes="mono" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <!-- Armour mode: worn mesh + body textures -->
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" IsVisible="{Binding $parent[Border].((vm:AssetPickerViewModel)DataContext).IsArmorMode}">
+                                        <views:ModelViewport Parts="{Binding WornParts}" Look="{Binding Look}" Message="{Binding Error}" />
+                                        <StackPanel Grid.Column="1" Spacing="8" Width="220">
+                                            <TextBlock Text="Not a chest or leg armour (no body look)." Classes="muted" IsVisible="{Binding !HasArmor}" />
+                                            <TextBlock Text="Chest · upper body" Classes="muted" IsVisible="{Binding HasArmor}" />
+                                            <Border Background="{StaticResource BgBrush}" CornerRadius="6" IsVisible="{Binding HasArmor}"><Image Source="{Binding ArmorChest}" Height="200" /></Border>
+                                            <TextBlock Text="Legs · lower body" Classes="muted" IsVisible="{Binding HasArmor}" />
+                                            <Border Background="{StaticResource BgBrush}" CornerRadius="6" IsVisible="{Binding HasArmor}"><Image Source="{Binding ArmorLegs}" Height="200" /></Border>
+                                        </StackPanel>
+                                    </Grid>
+                                    <!-- Mesh mode: the model -->
+                                    <views:ModelViewport Parts="{Binding Parts}" Look="{Binding Look}"
+                                                         IsVisible="{Binding $parent[Border].((vm:AssetPickerViewModel)DataContext).IsMeshMode}" />
+                                    <TextBlock Text="Reading from Valheim…" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Loading}" />
+                                </Panel>
+                            </DockPanel>
+                        </Panel>
+                    </Border>
+                </Grid>
+            </DockPanel>
+        </Border>
+    </Border>
+    </Grid>
+</UserControl>

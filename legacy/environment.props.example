@@ -1,0 +1,19 @@
+﻿<Project>
+  <PropertyGroup>
+    <!-- Copy to environment.props at suite root (gitignored). Child projects may add their own environment.props with only overrides. -->
+    <ValheimGamePath>C:\Program Files (x86)\Steam\steamapps\common\Valheim</ValheimGamePath>
+    <R2ModPath>C:\Users\YOUR_USER\AppData\Roaming\r2modmanPlus-local\Valheim\profiles</R2ModPath>
+    <!-- Optional second manager (Gale). Same ProfileName; build deploys to both when set. -->
+    <GaleModPath>C:\Users\YOUR_USER\AppData\Roaming\com.kesomannen.gale\valheim\profiles</GaleModPath>
+    <ProfileName>drakeTest</ProfileName>
+
+    <BepInExPath>$(R2ModPath)\$(ProfileName)\BepInEx</BepInExPath>
+    <CorlibPath>$(ValheimGamePath)\valheim_Data\Managed</CorlibPath>
+    <PublicizedAssembliesPath>$(ValheimGamePath)\valheim_Data\Managed\publicized_assemblies</PublicizedAssembliesPath>
+    <!-- Local deploy compiles against Pfhoenix (Thunderstore CI refs) and installs the zip into the profile.
+         Set UseCiValheimRefs to false only if you need live publicized assemblies for debugging. -->
+    <!-- <UseCiValheimRefs>false</UseCiValheimRefs> -->
+
+    <AfterTargets>Build</AfterTargets>
+  </PropertyGroup>
+</Project>

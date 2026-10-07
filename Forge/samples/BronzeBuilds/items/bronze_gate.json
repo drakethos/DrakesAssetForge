@@ -1,0 +1,33 @@
+{
+  "id": "drake_bronze_gate",
+  "kind": "piece",
+  "base": "iron_grate",
+  "name": "Bronze Gate",
+  "description": "A sturdy gate of bronze bars.",
+  "look": {
+    // No target = every material: the bars (fi_village_metal) and the frame (metalwall) both go bronze.
+    // Don't borrow SwordBronze's material here: weapons use a texture atlas that won't fit the gate's UVs.
+    "materials": [
+      { "tint": "#C48A48", "floats": { "_Glossiness": 0.65 } }
+    ]
+  },
+  "fields": {
+    "WearNTear": { "m_health": 1200 }
+  },
+  "behaviours": [
+    { "type": "glow", "color": "#FFB066", "intensity": 0.6, "range": 3, "nightOnly": true }
+  ],
+  "craft": {
+    "tool": "Hammer",
+    "category": "Building",
+    "station": "forge",
+    "requirements": [
+      { "item": "Bronze", "amount": 4 },
+      { "item": "FineWood", "amount": 2 }
+    ]
+  },
+  "snap": {
+    "mode": "add",
+    "points": [[0, 2, 0], [0, 0, 0]]
+  }
+}

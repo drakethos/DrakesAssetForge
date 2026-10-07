@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net481</TargetFramework>
+    <AssemblyName>DrakesForgeRuntime</AssemblyName>
+    <RootNamespace>DrakesForge.Runtime</RootNamespace>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- Release tag runtime-v{Version} must match (checked by .github/workflows/release.yml). -->
+    <Version>0.1.0</Version>
+    <!-- Thunderstore-style plugin folder so the dev deploy matches a real install. -->
+    <ForgePluginFolder>DrakeMods-DrakesForgeRuntime</ForgePluginFolder>
+  </PropertyGroup>
+
+  <!-- The pack format is compiled in, so players need no extra DLL. -->
+  <ItemGroup>
+    <Compile Include="..\Format\**\*.cs" Exclude="..\Format\obj\**;..\Format\bin\**" LinkBase="Format" />
+  </ItemGroup>
+
+  <!--
+    Compile references. Locally they come from environment.props (your profile + Valheim install).
+    CI passes -p:ForgeRefsDir=<folder holding every DLL below> (Pfhoenix reference package + Jotunn).
+  -->
+  <PropertyGroup Condition="'$(ForgeRefsDir)' == ''">
+    <ForgeBepInExDll>$(BepInExPath)\core\BepInEx.dll</ForgeBepInExDll>
+    <ForgeJotunnDll>$(BepInExPath)\plugins\ValheimModding-Jotunn\Jotunn.dll</ForgeJotunnDll>
+    <!-- Live 1.0 publicized refs locally, so signature drift fails at compile time. -->
+    <ForgeValheimDll>$(PublicizedAssembliesPath)\assembly_valheim_publicized.dll</ForgeValheimDll>
+    <ForgeManagedDir>$(CorlibPath)</ForgeManagedDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(ForgeRefsDir)' != ''">
+    <ForgeBepInExDll>$(ForgeRefsDir)\BepInEx.dll</ForgeBepInExDll>
+    <ForgeJotunnDll>$(ForgeRefsDir)\Jotunn.dll</ForgeJotunnDll>
+    <ForgeValheimDll>$(ForgeRefsDir)\assembly_valheim.dll</ForgeValheimDll>
+    <ForgeManagedDir>$(ForgeRefsDir)</ForgeManagedDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="BepInEx" HintPath="$(ForgeBepInExDll)" Private="false" />
+    <Reference Include="Jotunn" HintPath="$(ForgeJotunnDll)" Private="false" />
+    <Reference Include="assembly_valheim" HintPath="$(ForgeValheimDll)" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(ForgeManagedDir)\UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(ForgeManagedDir)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(ForgeManagedDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
+    <!-- Needed to resolve Jotunn's AssetBundle overloads even though Forge never loads bundles. -->
+    <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(ForgeManagedDir)\UnityEngine.AssetBundleModule.dll" Private="false" />
+    <!-- Unity 6 modules are built against netstandard 2.1; net481 only ships the 2.0 facade. -->
+    <Reference Include="netstandard" HintPath="$(ForgeManagedDir)\netstandard.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="DeployForgeRuntime" AfterTargets="Build" Condition="'$(ForgeRefsDir)' == '' and '$(BepInExPath)' != '' and Exists('$(BepInExPath)')">
+    <MakeDir Directories="$(BepInExPath)\plugins\$(ForgePluginFolder)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExPath)\plugins\$(ForgePluginFolder)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Deployed DrakesForgeRuntime to $(BepInExPath)\plugins\$(ForgePluginFolder)" />
+  </Target>
+
+  <!-- Debug builds also drop the sample pack into the push folder the runtime hot-reloads. -->
+  <Target Name="DeploySamplePack" AfterTargets="Build" Condition="'$(ForgeRefsDir)' == '' and '$(Configuration)' == 'Debug' and '$(LOCALAPPDATA)' != ''">
+    <ItemGroup>
+      <ForgeSample Include="..\samples\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ForgeSample)" DestinationFiles="@(ForgeSample->'$(LOCALAPPDATA)\DrakesAssetForge\Push\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

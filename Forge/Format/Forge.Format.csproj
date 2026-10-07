@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Pack/recipe format shared by the Forge app and Forge.Runtime (which compiles these sources in directly). No package dependencies on purpose. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>DrakesForge.Format</RootNamespace>
+    <AssemblyName>DrakesForge.Format</AssemblyName>
+  </PropertyGroup>
+</Project>

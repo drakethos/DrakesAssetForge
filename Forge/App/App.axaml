@@ -1,0 +1,203 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="DrakesForge.App.App"
+             RequestedThemeVariant="Dark">
+    <Application.Resources>
+        <!-- Forge palette (matches the design canvas). -->
+        <SolidColorBrush x:Key="BgBrush" Color="#121417" />
+        <SolidColorBrush x:Key="ViewportBrush" Color="#0F1113" />
+        <SolidColorBrush x:Key="PanelBrush" Color="#1A1D21" />
+        <SolidColorBrush x:Key="Panel2Brush" Color="#22262B" />
+        <SolidColorBrush x:Key="LineBrush" Color="#2C3036" />
+        <SolidColorBrush x:Key="TextBrush" Color="#ECE8E1" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#A3A9B0" />
+        <SolidColorBrush x:Key="EmberBrush" Color="#E8893C" />
+        <SolidColorBrush x:Key="EmberDarkBrush" Color="#3A2914" />
+        <SolidColorBrush x:Key="EmberTextBrush" Color="#F6C08F" />
+        <SolidColorBrush x:Key="SelectBrush" Color="#24303C" />
+        <SolidColorBrush x:Key="ValheimTagBrush" Color="#1D3145" />
+        <SolidColorBrush x:Key="ValheimTagTextBrush" Color="#9CC6EE" />
+        <SolidColorBrush x:Key="MineTagBrush" Color="#3A2914" />
+        <SolidColorBrush x:Key="MineTagTextBrush" Color="#F0B27A" />
+        <SolidColorBrush x:Key="WarnBrush" Color="#F1CF6B" />
+        <SolidColorBrush x:Key="OkBrush" Color="#7CC48A" />
+        <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, monospace</FontFamily>
+        <!-- Fluent accent (checkboxes, sliders, toggles) in ember instead of system blue. -->
+        <Color x:Key="SystemAccentColor">#E8893C</Color>
+        <Color x:Key="SystemAccentColorLight1">#F09A52</Color>
+        <Color x:Key="SystemAccentColorLight2">#F5AE6E</Color>
+        <Color x:Key="SystemAccentColorLight3">#F8C390</Color>
+        <Color x:Key="SystemAccentColorDark1">#D07A30</Color>
+        <Color x:Key="SystemAccentColorDark2">#B86A28</Color>
+        <Color x:Key="SystemAccentColorDark3">#9A5820</Color>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+
+        <Style Selector="Window">
+            <Setter Property="Background" Value="{StaticResource BgBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <!-- Section headers in panels ("MESH", "MATERIALS"). -->
+        <Style Selector="TextBlock.h">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="0.8" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.title">
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.mono">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+
+        <Style Selector="Border.panel">
+            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+        </Style>
+        <Style Selector="Border.section">
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="Padding" Value="16,14" />
+        </Style>
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="16" />
+        </Style>
+        <Style Selector="Border.chip">
+            <Setter Property="Background" Value="{StaticResource Panel2Brush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Padding" Value="10,5" />
+        </Style>
+        <Style Selector="Border.tag">
+            <Setter Property="Background" Value="{StaticResource ValheimTagBrush}" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.tag > TextBlock">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Foreground" Value="{StaticResource ValheimTagTextBrush}" />
+        </Style>
+        <Style Selector="Border.tag.mine">
+            <Setter Property="Background" Value="{StaticResource MineTagBrush}" />
+        </Style>
+        <Style Selector="Border.tag.mine > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MineTagTextBrush}" />
+        </Style>
+
+        <Style Selector="Button">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="{StaticResource EmberBrush}" />
+            <Setter Property="Foreground" Value="#1A1208" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#F09A52" />
+            <Setter Property="Foreground" Value="#1A1208" />
+        </Style>
+        <Style Selector="Button.small">
+            <Setter Property="Padding" Value="9,4" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button.ghost">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+
+        <!-- Segmented toggles (library source, preview mode, import "becomes"). -->
+        <Style Selector="RadioButton.seg">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border x:Name="bg" CornerRadius="5" Padding="12,6" Background="Transparent" Cursor="Hand">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"
+                                          Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="FontSize" Value="12.5" />
+        </Style>
+        <Style Selector="RadioButton.seg:checked /template/ Border#bg">
+            <Setter Property="Background" Value="#2C3138" />
+        </Style>
+        <Style Selector="RadioButton.seg:checked">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Style>
+        <Style Selector="RadioButton.seg.ember:checked /template/ Border#bg">
+            <Setter Property="Background" Value="{StaticResource EmberDarkBrush}" />
+        </Style>
+        <Style Selector="RadioButton.seg.ember:checked">
+            <Setter Property="Foreground" Value="{StaticResource EmberTextBrush}" />
+        </Style>
+        <Style Selector="Border.seg">
+            <Setter Property="Background" Value="{StaticResource BgBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="Padding" Value="3" />
+        </Style>
+
+        <!-- Inspector tabs: underline style. -->
+        <Style Selector="RadioButton.tab">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border x:Name="line" BorderThickness="0,0,0,2" BorderBrush="Transparent" Padding="0,12,0,10" Cursor="Hand">
+                        <ContentPresenter Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Margin" Value="0,0,18,0" />
+        </Style>
+        <Style Selector="RadioButton.tab:checked /template/ Border#line">
+            <Setter Property="BorderBrush" Value="{StaticResource EmberBrush}" />
+        </Style>
+        <Style Selector="RadioButton.tab:checked">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Style>
+
+        <Style Selector="ListBox">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Margin" Value="0,1" />
+        </Style>
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource SelectBrush}" />
+        </Style>
+
+        <Style Selector="TextBox">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="MinHeight" Value="30" />
+        </Style>
+    </Application.Styles>
+</Application>

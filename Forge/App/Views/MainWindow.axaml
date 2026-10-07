@@ -1,0 +1,177 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:DrakesForge.App.ViewModels"
+        xmlns:views="using:DrakesForge.App.Views"
+        x:Class="DrakesForge.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/assetforge.ico"
+        Width="1440" Height="900" MinWidth="1100" MinHeight="680"
+        Title="Drakes Asset Forge">
+
+    <Window.DataTemplates>
+        <DataTemplate DataType="vm:BrowseViewModel"><views:BrowseView /></DataTemplate>
+        <DataTemplate DataType="vm:ImportViewModel"><views:ImportView /></DataTemplate>
+        <DataTemplate DataType="vm:WorkspaceViewModel"><views:WorkspaceView /></DataTemplate>
+        <DataTemplate DataType="vm:PublishViewModel"><views:PublishView /></DataTemplate>
+    </Window.DataTemplates>
+
+    <Grid>
+    <DockPanel>
+        <!-- Header: pack, steps, push/publish -->
+        <Border DockPanel.Dock="Top" Classes="panel" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,0,1" Padding="16,9">
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Path Data="M3 9h13l-2 4H8l-1 3h10v3H5l2-6H5z M16 9l5-3" Stroke="{StaticResource EmberBrush}" StrokeThickness="1.8"
+                          Width="22" Height="22" Stretch="Uniform" />
+                    <TextBlock Text="Drakes Asset Forge" FontWeight="SemiBold" FontSize="14" VerticalAlignment="Center" />
+                    <Button Classes="small ghost" Margin="10,0,0,0" ToolTip.Tip="Pack folder, new pack, open pack">
+                        <TextBlock Text="{Binding PackTitle}" Foreground="{StaticResource TextBrush}" />
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuItem Header="New pack…" Command="{Binding ToggleNewPackCommand}" />
+                                <MenuItem Header="Open pack folder…" Command="{Binding OpenPackFolderCommand}" />
+                                <MenuItem Header="Show pack folder" Command="{Binding RevealPackCommand}" />
+                                <Separator />
+                                <MenuItem Header="Choose Valheim folder…" Command="{Binding ChooseValheimCommand}" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+
+                <ItemsControl Grid.Column="1" ItemsSource="{Binding Steps}" Margin="18,0,0,0" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:StepChip">
+                            <Button Classes="small ghost" Command="{Binding GoCommand}" CornerRadius="14" Classes.current="{Binding IsCurrent}">
+                                <TextBlock Text="{Binding Label}" />
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                    <ItemsControl.Styles>
+                        <Style Selector="Button.current">
+                            <Setter Property="Background" Value="{StaticResource EmberDarkBrush}" />
+                            <Setter Property="Foreground" Value="{StaticResource EmberTextBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Style>
+                    </ItemsControl.Styles>
+                </ItemsControl>
+
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button Classes="small ghost" Content="⚙ Settings" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="Packs folder and where Push to game installs" />
+                    <CheckBox IsChecked="{Binding LivePush}" Content="Live push" FontSize="12"
+                              ToolTip.Tip="Every save copies the pack to the game's push folder; Forge Runtime hot-reloads it." />
+                    <Button Classes="primary" Command="{Binding PushToGameCommand}" ToolTip.Tip="{Binding PushTargetLabel}">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Path Data="M6 4l14 8-14 8z" Fill="#1A1208" Width="10" Height="10" Stretch="Uniform" />
+                            <TextBlock Text="Push to game" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- New pack strip -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding ShowNewPack}" Background="{StaticResource Panel2Brush}" Padding="16,8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="New pack name" VerticalAlignment="Center" Classes="muted" />
+                <TextBox Text="{Binding NewPackName}" Width="260" PlaceholderText="Bronze Builds" />
+                <Button Classes="primary small" Content="Create" Command="{Binding ConfirmNewPackCommand}" />
+                <Button Classes="small ghost" Content="Cancel" Command="{Binding ToggleNewPackCommand}" />
+            </StackPanel>
+        </Border>
+
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Classes="panel" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="14,5">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Ellipse Width="8" Height="8" Fill="{StaticResource OkBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ValheimLabel}" Classes="muted" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" Margin="18,0" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                <TextBlock Grid.Column="2" Text="Packs ship 0 Valheim files" Classes="mono" />
+            </Grid>
+        </Border>
+
+        <!-- Setup problem (Valheim not found) -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding SetupMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                Background="#2A2412" BorderBrush="#4A3F1A" BorderThickness="0,0,0,1" Padding="16,10">
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <TextBlock Text="{Binding SetupMessage}" Foreground="{StaticResource WarnBrush}" VerticalAlignment="Center" />
+                <Button Classes="small" Content="Choose Valheim folder…" Command="{Binding ChooseValheimCommand}" />
+            </StackPanel>
+        </Border>
+
+        <ContentControl Content="{Binding Page}" />
+    </DockPanel>
+
+    <!-- Settings -->
+    <Border Background="#C0080909" IsVisible="{Binding Settings, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <Border Classes="card" Padding="0" Margin="48,36" MaxWidth="900" VerticalAlignment="Center" DataContext="{Binding Settings}" x:DataType="vm:SettingsViewModel"
+                IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <ScrollViewer MaxHeight="760">
+                <StackPanel Margin="24,20" Spacing="18">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="Settings" Classes="title" />
+                        <Button Grid.Column="1" Classes="small ghost" Content="✕" Command="{Binding CloseCommand}" />
+                    </Grid>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="PACKS FOLDER" Classes="h" />
+                        <TextBlock Classes="muted" Text="Where new packs (your projects) are created. Each pack is a plain folder you can back up or put in git." />
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                            <Border Classes="chip"><TextBlock Text="{Binding PacksFolder}" Classes="mono" TextTrimming="CharacterEllipsis" /></Border>
+                            <Button Grid.Column="1" Classes="small" Content="Change…" Command="{Binding ChoosePacksFolderCommand}" />
+                            <Button Grid.Column="2" Classes="small ghost" Content="Open" Command="{Binding OpenPacksFolderCommand}" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="PUSH TO GAME INSTALLS INTO" Classes="h" />
+                        <TextBlock Classes="muted" Text="Pick the mod profile you play/test with. Push copies the pack there unzipped (BepInEx\plugins\Author-Pack), like a Thunderstore install, and Forge Runtime hot-reloads it while the game runs." />
+                        <ItemsControl ItemsSource="{Binding Targets}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PushTargetRow">
+                                    <Border Background="{StaticResource Panel2Brush}" CornerRadius="8" Padding="10" Margin="0,0,0,6">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                            <RadioButton GroupName="pushTarget" IsChecked="{Binding IsSelected}" VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" Spacing="3">
+                                                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding Folder}" Classes="mono" TextTrimming="CharacterEllipsis" />
+                                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                                    <TextBlock Text="{Binding RuntimeText}" FontSize="12" Foreground="{Binding RuntimeOk, Converter={x:Static views:Converters.CheckBrush}}" />
+                                                    <TextBlock Text="{Binding JotunnText}" FontSize="12" Foreground="{Binding JotunnOk, Converter={x:Static views:Converters.CheckBrush}}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                <Button Classes="small primary" Content="Install Forge Runtime" Command="{Binding InstallRuntimeCommand}" IsVisible="{Binding CanInstallRuntime}" />
+                                                <Button Classes="small ghost" Content="Open" Command="{Binding OpenCommand}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Classes="small" Content="Other folder…" Command="{Binding AddCustomTargetCommand}" HorizontalAlignment="Left" />
+                        <TextBlock Text="{Binding Destination, StringFormat='This pack goes to: {0}'}" Classes="mono" TextWrapping="Wrap" />
+                        <Border IsVisible="{Binding HasDuplicates}" Background="#2A2412" BorderBrush="#4A3F1A" BorderThickness="1" CornerRadius="8" Padding="12">
+                            <StackPanel Spacing="6">
+                                <TextBlock Foreground="{StaticResource WarnBrush}" TextWrapping="Wrap"
+                                           Text="Other copies of this pack are in that profile. They'd load too and fight with your pushed copy:" />
+                                <ItemsControl ItemsSource="{Binding Duplicates}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" Classes="mono" TextWrapping="Wrap" /></DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button Classes="small" Content="Delete those copies" Command="{Binding RemoveDuplicatesCommand}" HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding Note}" Foreground="{StaticResource WarnBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Border>
+    </Grid>
+</Window>

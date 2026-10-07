@@ -1,0 +1,13 @@
+<Project>
+  <!--
+    Forge v2 (format, runtime, tests). Deliberately does NOT import the repo/suite Directory.Build.props:
+    Forge Runtime ships as its own Thunderstore package for non-suite users, so no DrakeModsLibs reference
+    and no suite packaging. Only machine paths (ValheimGamePath, BepInExPath, …) come from environment.props.
+  -->
+  <Import Project="$(MSBuildThisFileDirectory)..\..\environment.props" Condition="Exists('$(MSBuildThisFileDirectory)..\..\environment.props')" />
+  <Import Project="$(MSBuildThisFileDirectory)..\environment.props" Condition="Exists('$(MSBuildThisFileDirectory)..\environment.props')" />
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>

@@ -19,6 +19,11 @@
     <!-- Smoke is a net481 BepInEx plugin in its own project. SDK default globs would compile it into this app. -->
     <Compile Remove="Smoke\**" />
     <Compile Remove="UnityTemplate\**" />
+    <!-- Forge v2 projects build on their own. -->
+    <Compile Remove="Forge\**" />
+    <None Remove="Forge\**" />
+    <EmbeddedResource Remove="Forge\**" />
+    <AvaloniaXaml Remove="Forge\**" />
     <EmbeddedResource Remove="Smoke\**" />
     <EmbeddedResource Remove="UnityTemplate\**" />
     <None Remove="Smoke\**" />

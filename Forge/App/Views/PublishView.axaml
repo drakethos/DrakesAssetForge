@@ -1,0 +1,178 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DrakesForge.App.ViewModels"
+             xmlns:views="using:DrakesForge.App.Views"
+             x:Class="DrakesForge.App.Views.PublishView"
+             x:DataType="vm:PublishViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="Border.option">
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Border.option.on">
+            <Setter Property="BorderBrush" Value="{StaticResource EmberBrush}" />
+            <Setter Property="Background" Value="#231C15" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer>
+        <Grid ColumnDefinitions="*,440" ColumnSpacing="20" Margin="24,20" MaxWidth="1320">
+            <!-- Left: what Thunderstore shows -->
+            <StackPanel Spacing="20">
+                <Border Classes="card">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="PACK" Classes="h" />
+                        <Grid ColumnDefinitions="140,*" ColumnSpacing="16">
+                            <StackPanel Spacing="6">
+                                <Border Width="128" Height="128" CornerRadius="10" Background="{StaticResource BgBrush}" BorderBrush="{StaticResource LineBrush}" BorderThickness="1">
+                                    <Panel>
+                                        <Image Source="{Binding Icon}" />
+                                        <TextBlock Text="No icon" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNull}}" />
+                                    </Panel>
+                                </Border>
+                                <Button Classes="small" Content="Make from items" Command="{Binding MakeIconCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                                <Button Classes="small ghost" Content="Use PNG…" Command="{Binding ChooseIconCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                            </StackPanel>
+                            <Grid Grid.Column="1" ColumnDefinitions="96,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10">
+                                <TextBlock Text="Name" Classes="muted" VerticalAlignment="Center" />
+                                <TextBox Grid.Column="1" Text="{Binding PackName}" />
+                                <TextBlock Grid.Row="1" Text="Version" Classes="muted" VerticalAlignment="Center" />
+                                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <TextBox Text="{Binding Version}" Width="110" />
+                                    <Button Classes="small" Content="+1" Command="{Binding BumpVersionCommand}" ToolTip.Tip="Next patch version (1.2.3 → 1.2.4)" />
+                                </StackPanel>
+                                <TextBlock Grid.Row="2" Text="Author" Classes="muted" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Author}" PlaceholderText="Your Thunderstore team name" />
+                                <TextBlock Grid.Row="3" Text="Website" Classes="muted" VerticalAlignment="Center" />
+                                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Website}" PlaceholderText="https://github.com/you/your-pack (optional)" />
+                                <TextBlock Grid.Row="4" Text="Description" Classes="muted" VerticalAlignment="Top" Margin="0,6,0,0" />
+                                <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap" Height="60" MaxLength="250"
+                                         PlaceholderText="One line for the Thunderstore listing (max 250)" />
+                            </Grid>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="README.md" Classes="h" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Classes="small" Content="Write it from my items" Command="{Binding GenerateReadmeCommand}" />
+                        </Grid>
+                        <TextBox Text="{Binding Readme}" AcceptsReturn="True" TextWrapping="Wrap" Height="220" FontFamily="{StaticResource MonoFont}" FontSize="12"
+                                 PlaceholderText="The page people see on Thunderstore. Markdown." />
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="WHAT'S NEW IN THIS VERSION" Classes="h" />
+                        <TextBox Text="{Binding ChangelogNote}" AcceptsReturn="True" TextWrapping="Wrap" Height="70"
+                                 PlaceholderText="One change per line. Added to CHANGELOG.md under this version when you save the zip or generate code." />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- Right: output -->
+            <StackPanel Grid.Column="1" Spacing="20">
+                <Border Classes="card">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="OUTPUT" Classes="h" />
+                        <Button Background="Transparent" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Command="{Binding SetOutputCommand}" CommandParameter="zip">
+                            <Border Classes="option" Classes.on="{Binding OutputZip}">
+                                <StackPanel Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="Data pack" FontWeight="SemiBold" />
+                                        <Border Classes="tag" Background="#1D3A26"><TextBlock Text="no code" Foreground="#8FD6A0" /></Border>
+                                    </StackPanel>
+                                    <TextBlock Classes="muted" Text="A Thunderstore zip of recipes and your files. Needs Forge Runtime (80 KB) installed alongside." />
+                                </StackPanel>
+                            </Border>
+                        </Button>
+                        <Button Background="Transparent" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Command="{Binding SetOutputCommand}" CommandParameter="code">
+                            <Border Classes="option" Classes.on="{Binding OutputCode}">
+                                <StackPanel Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="C# mod project" FontWeight="SemiBold" />
+                                        <Border Classes="tag" Background="#2A2440"><TextBlock Text="your own DLL" Foreground="#C3B4F2" /></Border>
+                                    </StackPanel>
+                                    <TextBlock Classes="muted" Text="Forge is compiled into your mod (no Forge Runtime dependency). Each item gets a Customize file for your own code. Re-export any time; your code is kept." />
+                                </StackPanel>
+                            </Border>
+                        </Button>
+
+                        <!-- Data pack actions -->
+                        <StackPanel Spacing="8" IsVisible="{Binding OutputZip}">
+                            <Button Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Save Thunderstore .zip" Command="{Binding SaveZipCommand}" />
+                            <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Push to game" Command="{Binding PushCommand}" />
+                            <Button Classes="small ghost" HorizontalAlignment="Center" Content="Open releases folder" Command="{Binding OpenReleasesCommand}" />
+                        </StackPanel>
+
+                        <!-- C# actions -->
+                        <StackPanel Spacing="8" IsVisible="{Binding OutputCode}">
+                            <Border Classes="seg" HorizontalAlignment="Left">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Classes="seg" Content="New mod" GroupName="codeMode" IsChecked="{Binding !IntoExisting}" />
+                                    <RadioButton Classes="seg" Content="Into my existing mod" GroupName="codeMode" IsChecked="{Binding IntoExisting}" />
+                                </StackPanel>
+                            </Border>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                <Border Classes="chip"><TextBlock Text="{Binding CodeFolder}" Classes="mono" TextTrimming="CharacterEllipsis" /></Border>
+                                <Button Grid.Column="1" Classes="small" Content="Change…" Command="{Binding ChooseCodeFolderCommand}" />
+                            </Grid>
+                            <Button Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Content="Generate / update project" Command="{Binding GenerateCodeCommand}" />
+                            <UniformGrid Columns="3" ColumnSpacing="6">
+                                <Button Content="Build" Command="{Binding BuildCodeCommand}" IsEnabled="{Binding !Building}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                        ToolTip.Tip="dotnet build: compiles and installs into the profile set in environment.props" />
+                                <Button Content="Open in IDE" Command="{Binding OpenInIdeCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                                <Button Content="Folder" Command="{Binding OpenCodeFolderCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+                            </UniformGrid>
+                            <ItemsControl ItemsSource="{Binding CodeLog}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" Classes="mono" TextWrapping="Wrap" Margin="0,2" /></DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding Result}" Classes="muted" />
+                        <TextBlock Text="{Binding DependencyText}" Classes="muted" />
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="CHECKS" Classes="h" />
+                        <ItemsControl ItemsSource="{Binding Checks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:CheckRow">
+                                    <Grid ColumnDefinitions="20,*" Margin="0,0,0,8">
+                                        <TextBlock Text="{Binding Glyph}" FontWeight="Bold" Foreground="{Binding Ok, Converter={x:Static views:Converters.CheckBrush}}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Classes="card">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="WHAT SHIPS (DATA PACK)" Classes="h" />
+                        <ItemsControl ItemsSource="{Binding ShippedFiles}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Text="{Binding}" Classes="mono" Margin="0,2" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

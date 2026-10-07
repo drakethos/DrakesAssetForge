@@ -1,0 +1,10 @@
+{
+  "id": "SwordBronze",
+  "kind": "reskin",
+  "base": "SwordBronze",
+  "look": {
+    "materials": [
+      { "tint": "#5A4632" }
+    ]
+  }
+}

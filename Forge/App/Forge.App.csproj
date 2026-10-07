@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>DrakesForge.App</RootNamespace>
+    <AssemblyName>DrakesAssetForge</AssemblyName>
+    <!-- Release tag app-v{Version} must match (checked by .github/workflows/release.yml). -->
+    <Version>0.1.0</Version>
+    <Product>Drakes Asset Forge</Product>
+    <Authors>DrakeMods</Authors>
+    <ApplicationIcon>Assets\assetforge.ico</ApplicationIcon>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\assetforge.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.2" />
+    <!-- Headless + Skia lets the "screenshot" command render screens to PNG without a window (used to check layouts). -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.2" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="StbImageSharp" Version="2.30.15" />
+    <PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
+  </ItemGroup>
+
+  <Import Project="runtime.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\Format\Forge.Format.csproj" />
+    <ProjectReference Include="..\Valheim\Forge.Valheim.csproj" />
+  </ItemGroup>
+</Project>

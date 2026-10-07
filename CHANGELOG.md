@@ -5,6 +5,11 @@ Two things release from this repo, each with its own version and tag:
 - **Drakes Asset Forge** (the desktop app): tags `app-v*`
 - **Drakes Forge Runtime** (the BepInEx mod packs need): tags `runtime-v*`, changelog in [Forge/Runtime/thunderstore/CHANGELOG.md](Forge/Runtime/thunderstore/CHANGELOG.md)
 
+## App: unreleased
+
+- Pack list: **Duplicate** (Ctrl+D), **Copy** (Ctrl+C) and **Paste** (Ctrl+V), also on right-click. Copies get a free id (`_copy`, `_copy2`…); a reskin's copy becomes its own item or piece. Paste works across packs and brings the item's images along.
+- Sprite sizes and positions no longer show float noise (0.6000000238) after reopening.
+
 ## App 0.2.0
 
 Data packs made with 0.2.0 need **Forge Runtime 0.2.0** (their manifest says so).

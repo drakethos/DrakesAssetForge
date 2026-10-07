@@ -85,19 +85,22 @@ public sealed partial class SpriteRow : ObservableObject
     public static SpriteRow From(SpriteRecipe s, RgbaImage? image)
     {
         var row = new SpriteRow(s.File, image) { _keepAspect = false };
-        row.Width = s.Width;
-        row.Height = s.Height;
-        row.X = s.Position.X;
-        row.Y = s.Position.Y;
-        row.Z = s.Position.Z;
-        row.RotX = s.Rotation.X;
-        row.RotY = s.Rotation.Y;
-        row.RotZ = s.Rotation.Z;
+        row.Width = R(s.Width);
+        row.Height = R(s.Height);
+        row.X = R(s.Position.X);
+        row.Y = R(s.Position.Y);
+        row.Z = R(s.Position.Z);
+        row.RotX = R(s.Rotation.X);
+        row.RotY = R(s.Rotation.Y);
+        row.RotZ = R(s.Rotation.Z);
         row.DoubleSided = s.DoubleSided;
         // Keep the lock only if the saved size already matches the image.
         row.KeepAspect = Math.Abs(s.Width / Math.Max(s.Height, 1e-4) - row.Aspect) < 0.01;
         return row;
     }
+
+    // Saved values are floats: 0.6f reads back as 0.6000000238 without this.
+    private static double R(float v) => Math.Round(v, 4);
 
     public SpriteRecipe ToRecipe() => new()
     {

@@ -8,6 +8,15 @@ public static class Dialogs
 {
     public static TopLevel? Owner { get; set; }
 
+    public static async Task CopyTextAsync(string text)
+    {
+        if (Owner?.Clipboard is { } clipboard)
+            await Avalonia.Input.Platform.ClipboardExtensions.SetTextAsync(clipboard, text);
+    }
+
+    public static async Task<string?> PasteTextAsync() =>
+        Owner?.Clipboard is { } clipboard ? await Avalonia.Input.Platform.ClipboardExtensions.TryGetTextAsync(clipboard) : null;
+
     public static async Task<string?> PickFolderAsync(string title)
     {
         if (Owner == null)

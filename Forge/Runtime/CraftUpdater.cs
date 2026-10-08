@@ -11,14 +11,22 @@ namespace DrakesForge.Runtime;
 /// </summary>
 internal static class CraftUpdater
 {
-    public static void Apply(ForgeEntry entry, List<string> warnings)
+    public delegate string? ItemResolver(string name, out string? note);
+
+    public static void Apply(ForgeEntry entry, List<string> warnings, ItemResolver resolve)
     {
         var craft = entry.Recipe.Craft;
         if (craft == null || ObjectDB.instance == null)
             return;
 
         var resources = craft.Requirements
-            .Select(r => (r, drop: ObjectDB.instance.GetItemPrefab(r.Item)?.GetComponent<ItemDrop>()))
+            .Select(r =>
+            {
+                var name = resolve(r.Item, out var note);
+                if (note != null)
+                    warnings.Add("craft: " + note);
+                return (r, drop: name == null ? null : ObjectDB.instance.GetItemPrefab(name)?.GetComponent<ItemDrop>());
+            })
             .Where(x =>
             {
                 if (x.drop == null)

@@ -143,6 +143,13 @@ internal static class Cli
             files.AddRange(r.Look.Materials.SelectMany(m => m.Textures.Values));
             files.AddRange(r.Look.Sprites.Select(s => s.File));
             files.AddRange(r.Look.Parts.SelectMany(p => p.Materials).SelectMany(m => m.Textures.Values));
+            var vanillaItems = new HashSet<string>(vanilla.ItemNames, StringComparer.Ordinal);
+            foreach (var q in r.Craft?.Requirements ?? new List<Requirement>())
+            {
+                CostItems.Resolve(q.Item, pack.Recipes, vanillaItems, out var note);
+                if (note != null)
+                    problems.Add($"{r.Id}: craft: {note}");
+            }
             foreach (var part in r.Look.Parts.Where(p => !vanilla.Catalog.ByName.ContainsKey(p.Prefab)))
                 problems.Add($"{r.Id}: part prefab '{part.Prefab}' isn't in this Valheim install.");
             foreach (var f in files.Where(f => !string.IsNullOrEmpty(f)).Distinct())
@@ -249,6 +256,7 @@ internal static class Cli
         {
             using var vanilla = OpenVanilla();
             var types = LiteTypeInfo.LoadAsync(pack.Recipes, vanilla.InspectAsync, vanilla.ComponentDefaultsAsync).GetAwaiter().GetResult();
+            types.VanillaItems.UnionWith(vanilla.ItemNames);
             var options = new LiteOptions
             {
                 UseLibs = args.Contains("--libs"),

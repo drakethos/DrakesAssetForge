@@ -28,11 +28,16 @@ public sealed class LiteTypeInfo
 {
     public Dictionary<string, PrefabInfo> Bases { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, IReadOnlyList<FieldNode>> Added { get; } = new(StringComparer.Ordinal);
+    /// <summary>Valheim's item prefab names, so costs can be checked (empty = trust the recipe).</summary>
+    public HashSet<string> VanillaItems { get; } = new(StringComparer.Ordinal);
+    /// <summary>All recipes of the pack being exported (costs may name its items).</summary>
+    public List<ItemRecipe> Recipes { get; } = new();
 
     public static async Task<LiteTypeInfo> LoadAsync(IEnumerable<ItemRecipe> recipes,
         Func<string, Task<PrefabInfo?>> baseInfo, Func<string, Task<IReadOnlyList<FieldNode>>> defaults)
     {
         var info = new LiteTypeInfo();
+        info.Recipes.AddRange(recipes);
         foreach (var recipe in recipes)
         {
             if (!info.Bases.ContainsKey(recipe.Base) && await baseInfo(recipe.Base) is { } prefab)
@@ -238,10 +243,21 @@ public static class LiteCodeWriter
         void L(string line = "") => b.Append(line.Length == 0 ? "" : "        " + line).Append('\n');
 
         var craft = recipe.Craft;
-        var requirements = craft == null || craft.Requirements.Count == 0
+        // Costs must name real items: a display name is turned into the pack item's id, anything unknown is left
+        // out (an unresolved cost becomes an empty requirement in game and crashes removing the piece).
+        var costs = new List<string>();
+        foreach (var r in craft?.Requirements ?? new List<Requirement>())
+        {
+            var item = types.VanillaItems.Count == 0 ? r.Item.Trim() : CostItems.Resolve(r.Item, types.Recipes, types.VanillaItems, out var note);
+            if (item == null)
+                costs.Add($"                // TODO: {CodeProjectWriter.Escape(r.Item)} x{r.Amount} left out: no such item");
+            else
+                costs.Add($"                new RequirementConfig({Str(item)}, {r.Amount}, {r.AmountPerLevel}, {Bool(r.Recover)}),");
+        }
+
+        var requirements = costs.Count == 0
             ? "System.Array.Empty<RequirementConfig>()"
-            : "new[]\n            {\n" + string.Join(",\n", craft.Requirements.Select(r =>
-                $"                new RequirementConfig({Str(r.Item)}, {r.Amount}, {r.AmountPerLevel}, {Bool(r.Recover)})")) + "\n            }";
+            : "new RequirementConfig[]\n            {\n" + string.Join("\n", costs) + "\n            }";
 
         switch (recipe.Kind)
         {

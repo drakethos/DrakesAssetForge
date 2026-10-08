@@ -712,13 +712,17 @@
                                     <ItemsControl ItemsSource="{Binding Requirements}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:RequirementRow">
-                                                <Grid ColumnDefinitions="*,60,Auto,Auto" ColumnSpacing="6" Margin="0,0,0,4">
+                                                <StackPanel Margin="0,0,0,4">
+                                                <Grid ColumnDefinitions="*,60,Auto,Auto" ColumnSpacing="6">
                                                     <AutoCompleteBox Text="{Binding Item}" FilterMode="ContainsOrdinal" MinimumPrefixLength="1" PlaceholderText="Item (Bronze)"
                                                                      ItemsSource="{Binding $parent[ItemsControl].((vm:ItemEditorViewModel)DataContext).ItemNames}" />
                                                     <TextBox Grid.Column="1" Text="{Binding Amount}" />
                                                     <CheckBox Grid.Column="2" Content="refund" IsChecked="{Binding Recover}" FontSize="12" />
                                                     <Button Grid.Column="3" Classes="small ghost" Content="×" Command="{Binding RemoveCommand}" />
                                                 </Grid>
+                                                <TextBlock Text="{Binding Warning}" IsVisible="{Binding HasWarning}" Foreground="{StaticResource WarnBrush}"
+                                                           FontSize="11.5" TextWrapping="Wrap" Margin="2,2,0,0" />
+                                                </StackPanel>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>

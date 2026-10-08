@@ -19,7 +19,12 @@ public sealed partial class RequirementRow : ObservableObject
     [ObservableProperty] private string _item = "";
     [ObservableProperty] private int _amount = 1;
     [ObservableProperty] private bool _recover = true;
+    /// <summary>Why this item won't work as written (empty when it's fine).</summary>
+    [ObservableProperty] private string _warning = "";
+    public bool HasWarning => Warning.Length > 0;
     public IRelayCommand? RemoveCommand { get; set; }
+
+    partial void OnWarningChanged(string value) => OnPropertyChanged(nameof(HasWarning));
 }
 
 public sealed partial class SnapRow : ObservableObject
@@ -134,7 +139,24 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     public IReadOnlyList<string> PrefabNames => _main.Vanilla?.PrefabNames ?? Array.Empty<string>();
 
     /// <summary>Item prefab names (cost autocomplete).</summary>
-    public IReadOnlyList<string> ItemNames => _main.Vanilla?.ItemNames ?? Array.Empty<string>();
+    /// <summary>Cost suggestions: Valheim's items plus this pack's own items (by id).</summary>
+    public IReadOnlyList<string> ItemNames => (Pack == null ? Array.Empty<string>() : CostItems.PackItemIds(Pack.Recipes).Where(id => id != Recipe.Id))
+        .Concat(_main.Vanilla?.ItemNames ?? Array.Empty<string>()).ToList();
+
+    private HashSet<string>? _vanillaItems;
+    private IReadOnlySet<string> VanillaItems => _vanillaItems ??= new HashSet<string>(_main.Vanilla?.ItemNames ?? Array.Empty<string>(), StringComparer.Ordinal);
+
+    private void CheckCost(RequirementRow row)
+    {
+        if (Pack == null || _main.Vanilla == null || row.Item.Trim().Length == 0)
+        {
+            row.Warning = "";
+            return;
+        }
+
+        CostItems.Resolve(row.Item, Pack.Recipes, VanillaItems, out var note);
+        row.Warning = note ?? "";
+    }
 
     // Identity
     [ObservableProperty] private string _name;
@@ -824,6 +846,9 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         _saveTimer.Start();
     }
 
+    private string CostItemId(string item) =>
+        Pack != null && _main.Vanilla != null ? CostItems.Resolve(item, Pack.Recipes, VanillaItems, out _) ?? item.Trim() : item.Trim();
+
     /// <summary>Stops the autosave timer without writing. Used when the recipe is being deleted.</summary>
     public void DiscardPendingSave() => _saveTimer.Stop();
 
@@ -882,8 +907,9 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
                 Category = IsPiece ? Category : null,
                 Station = Station == "none" ? null : Station,
                 StationLevel = Math.Max(1, StationLevel),
+                // A display name ("Piece of Paper") or wrong case is saved as the id the game needs.
                 Requirements = Requirements.Where(r => r.Item.Trim().Length > 0)
-                    .Select(r => new Requirement { Item = r.Item.Trim(), Amount = r.Amount, Recover = r.Recover }).ToList()
+                    .Select(r => new Requirement { Item = CostItemId(r.Item), Amount = r.Amount, Recover = r.Recover }).ToList()
             }
             : null;
 
@@ -975,6 +1001,12 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     {
         var row = new RequirementRow { Item = item, Amount = amount, Recover = recover };
         row.RemoveCommand = new RelayCommand(() => Requirements.Remove(row));
+        row.PropertyChanged += (_, a) =>
+        {
+            if (a.PropertyName == nameof(RequirementRow.Item))
+                CheckCost(row);
+        };
+        CheckCost(row);
         Requirements.Add(row);
     }
 

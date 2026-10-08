@@ -55,10 +55,32 @@ internal sealed class ForgeRegistry
         }
     }
 
+    // Every recipe id in the loaded packs, and display name -> id, so costs can name items from any pack.
+    private readonly HashSet<string> _packIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _packNames = new(StringComparer.OrdinalIgnoreCase);
+    private bool _sanitizeHooked;
+
     public void RegisterAll(IEnumerable<LoadedPack> packs)
     {
         var counts = new Dictionary<RecipeKind, int>();
-        foreach (var pack in packs)
+        var all = packs.ToList();
+        foreach (var recipe in all.SelectMany(p => p.Recipes))
+        {
+            _packIds.Add(recipe.Id);
+            if (recipe.Name != null && recipe.Kind != RecipeKind.Piece && !_packNames.ContainsKey(recipe.Name))
+                _packNames[recipe.Name] = recipe.Id;
+        }
+
+        if (!_sanitizeHooked)
+        {
+            // Last line of defence: a cost Jotunn couldn't resolve leaves an empty requirement, which crashes
+            // Piece.DropResources when the piece is removed. Drop those once everything is registered.
+            _sanitizeHooked = true;
+            PieceManager.OnPiecesRegistered += SanitizeRequirements;
+            ItemManager.OnItemsRegistered += SanitizeRequirements;
+        }
+
+        foreach (var pack in all)
         {
             foreach (var recipe in pack.Recipes)
             {
@@ -113,7 +135,7 @@ internal sealed class ForgeRegistry
                 entry.Baseline.Restore(entry.Prefab);
                 var warnings = Apply(entry);
                 if (recipe.Kind != RecipeKind.Reskin)
-                    CraftUpdater.Apply(entry, warnings);
+                    CraftUpdater.Apply(entry, warnings, ResolveItem);
                 Built(entry, true, warnings);
                 var synced = InstanceSync.Sync(entry.Prefab);
                 Report(entry, warnings, $"reloaded, {synced} placed/dropped instance(s) updated");
@@ -151,7 +173,7 @@ internal sealed class ForgeRegistry
                     Description = recipe.Description,
                     CraftingStation = GameNames.Station(recipe.Craft?.Station),
                     MinStationLevel = recipe.Craft?.StationLevel ?? 1,
-                    Requirements = Requirements(recipe.Craft)
+                    Requirements = Requirements(recipe)
                 });
                 entry = new ForgeEntry(recipe, pack, custom.ItemPrefab);
                 Report(entry, ApplyAndBuild(entry), $"item from {recipe.Base}");
@@ -173,7 +195,7 @@ internal sealed class ForgeRegistry
                     PieceTable = GameNames.PieceTable(recipe.Craft?.Tool),
                     Category = recipe.Craft?.Category,
                     CraftingStation = GameNames.Station(recipe.Craft?.Station),
-                    Requirements = Requirements(recipe.Craft)
+                    Requirements = Requirements(recipe)
                 });
                 entry = new ForgeEntry(recipe, pack, custom.PiecePrefab);
                 Report(entry, ApplyAndBuild(entry), $"piece from {recipe.Base}");
@@ -243,9 +265,64 @@ internal sealed class ForgeRegistry
         }
     }
 
-    private static RequirementConfig[] Requirements(CraftRecipe? craft) =>
-        craft?.Requirements.Select(r => new RequirementConfig(r.Item, r.Amount, r.AmountPerLevel, r.Recover)).ToArray()
-        ?? Array.Empty<RequirementConfig>();
+    private RequirementConfig[] Requirements(ItemRecipe recipe)
+    {
+        var result = new List<RequirementConfig>();
+        foreach (var r in recipe.Craft?.Requirements ?? new List<Requirement>())
+        {
+            var item = ResolveItem(r.Item, out var note);
+            if (note != null)
+                ForgeLog.Source.LogWarning($"{recipe.Id}: craft: {note}");
+            if (item != null)
+                result.Add(new RequirementConfig(item, r.Amount, r.AmountPerLevel, r.Recover));
+        }
+
+        return result.ToArray();
+    }
+
+    /// <summary>
+    /// A cost's item as a prefab name: a Valheim/mod item prefab, an item from a loaded pack, or (forgiving) a pack
+    /// item's display name. Null when nothing matches, so the cost is left out instead of becoming an empty
+    /// requirement (which crashes Piece.DropResources when the piece is removed).
+    /// </summary>
+    internal string? ResolveItem(string name, out string? note)
+    {
+        note = null;
+        name = name.Trim();
+        if (name.Length == 0)
+            return null;
+        if (_packIds.Contains(name) || PrefabManager.Instance.GetPrefab(name)?.GetComponent<ItemDrop>() != null)
+            return name;
+        if (_packNames.TryGetValue(name, out var id))
+        {
+            note = $"'{name}' is a display name; using the item id '{id}' (write the id in the recipe)";
+            return id;
+        }
+
+        note = $"no item '{name}' (use its prefab name, e.g. Wood, Bronze, or an item id from your pack); left out of the cost";
+        return null;
+    }
+
+    private void SanitizeRequirements()
+    {
+        foreach (var entry in _entries.Values)
+        {
+            if (entry.Prefab.GetComponent<Piece>() is { } piece && piece.m_resources != null && piece.m_resources.Any(r => r == null || r.m_resItem == null))
+            {
+                piece.m_resources = piece.m_resources.Where(r => r != null && r.m_resItem != null).ToArray();
+                ForgeLog.Source.LogWarning($"{entry.Recipe.Id}: removed cost entries whose item doesn't exist");
+            }
+
+            if (ObjectDB.instance == null)
+                continue;
+            foreach (var recipe in ObjectDB.instance.m_recipes.Where(r => r != null && r.m_item != null && r.m_item.name == entry.Prefab.name))
+                if (recipe.m_resources != null && recipe.m_resources.Any(r => r == null || r.m_resItem == null))
+                {
+                    recipe.m_resources = recipe.m_resources.Where(r => r != null && r.m_resItem != null).ToArray();
+                    ForgeLog.Source.LogWarning($"{entry.Recipe.Id}: removed recipe cost entries whose item doesn't exist");
+                }
+        }
+    }
 
     private static void Report(ForgeEntry entry, List<string> warnings, string what)
     {

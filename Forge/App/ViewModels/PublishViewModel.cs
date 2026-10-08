@@ -150,9 +150,21 @@ public sealed partial class PublishViewModel : ObservableObject
         {
             var missing = loaded.Recipes.Where(r => !vanilla.Catalog.ByName.ContainsKey(r.Base)).Select(r => r.Base).ToList();
             Checks.Add(new CheckRow { Ok = missing.Count == 0, Text = missing.Count == 0 ? "Every base prefab exists in your Valheim" : $"Not in this Valheim: {string.Join(", ", missing)}" });
-            var badItems = loaded.Recipes.SelectMany(r => r.Craft?.Requirements ?? new List<Requirement>())
-                .Select(q => q.Item).Where(i => !vanilla.Catalog.ByName.ContainsKey(i)).Distinct().ToList();
-            Checks.Add(new CheckRow { Ok = badItems.Count == 0, Text = badItems.Count == 0 ? "Every cost item exists" : $"Unknown cost items: {string.Join(", ", badItems)}" });
+            var vanillaItems = new HashSet<string>(vanilla.ItemNames, StringComparer.Ordinal);
+            var costNotes = new List<string>();
+            foreach (var r in loaded.Recipes)
+                foreach (var q in r.Craft?.Requirements ?? new List<Requirement>())
+                {
+                    CostItems.Resolve(q.Item, loaded.Recipes, vanillaItems, out var note);
+                    if (note != null)
+                        costNotes.Add($"{r.Id}: {note}");
+                }
+
+            Checks.Add(new CheckRow
+            {
+                Ok = costNotes.Count == 0,
+                Text = costNotes.Count == 0 ? "Every cost item exists" : "Cost items to fix (a wrong one breaks removing the piece in game):\n" + string.Join("\n", costNotes.Distinct())
+            });
         }
 
         Checks.Add(new CheckRow { Ok = Regex.IsMatch(pack.Manifest.Version, @"^\d+\.\d+\.\d+$"), Text = "Version looks like 1.2.3" });
@@ -325,6 +337,7 @@ public sealed partial class PublishViewModel : ObservableObject
 
                 CodeLog.Add("Reading the game's scripts…");
                 var types = await LiteTypeInfo.LoadAsync(pack.Recipes, vanilla.InspectAsync, vanilla.ComponentDefaultsAsync);
+                types.VanillaItems.UnionWith(vanilla.ItemNames);
                 CodeLog.Clear();
                 result = LiteCodeWriter.Write(pack, CodeFolder, IntoExisting, types, _main.CurrentPushTarget, vanilla.Catalog.Install.Root,
                     new LiteOptions { UseLibs = PlainUseLibs, Embed = PlainEmbed, LookOnly = PlainLookOnly && IntoExisting });

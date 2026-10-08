@@ -96,6 +96,8 @@ internal static class Cli
                 .Set("materials", JsonArray(info.MaterialSlots.DistinctBy(m => m.Name).Select(m => JsonValue.NewObject()
                     .Set("name", m.Name).Set("shader", m.Shader).Set("texture", m.MainTextureName))))
                 .Set("snapPoints", JsonArray(info.SnapPoints.Select(p => Vec(p))))
+                .Set("meshes", JsonArray(info.Renderers.Where(r => r.MeshName != "(none)").Select(r => JsonValue.NewObject()
+                    .Set("path", r.Path).Set("mesh", r.MeshName))))
                 .Set("lights", info.Lights.Count)
                 .Set("particles", info.Particles.Count);
             if (!box.IsEmpty)
@@ -110,6 +112,8 @@ internal static class Cli
             Console.WriteLine($"  size:      {box.Size.X:0.###} wide x {box.Size.Y:0.###} tall x {box.Size.Z:0.###} deep (m), min ({F(box.Min)}) max ({F(box.Max)})");
         foreach (var m in info.MaterialSlots.DistinctBy(m => m.Name))
             Console.WriteLine($"  material:  {m.Name}  shader={m.Shader}  texture={m.MainTextureName ?? "-"}");
+        foreach (var r in info.Renderers.Where(r => r.MeshName != "(none)"))
+            Console.WriteLine($"  mesh:      {(r.Path.Length == 0 ? "(root)" : r.Path)}  ({r.MeshName})  hideMeshes: \"{r.Path}\"");
         if (info.SnapPoints.Count > 0)
             Console.WriteLine($"  snap:      {string.Join("  ", info.SnapPoints.Select(p => "(" + F(p) + ")"))}");
         if (info.Lights.Count + info.Particles.Count > 0)
@@ -142,6 +146,7 @@ internal static class Cli
             var files = new List<string?> { r.Look.Icon };
             files.AddRange(r.Look.Materials.SelectMany(m => m.Textures.Values));
             files.AddRange(r.Look.Sprites.Select(s => s.File));
+            files.Add(r.Look.Mesh?.File);
             files.AddRange(r.Look.Parts.SelectMany(p => p.Materials).SelectMany(m => m.Textures.Values));
             var vanillaItems = new HashSet<string>(vanilla.ItemNames, StringComparer.Ordinal);
             foreach (var q in r.Craft?.Requirements ?? new List<Requirement>())
@@ -155,6 +160,9 @@ internal static class Cli
             foreach (var f in files.Where(f => !string.IsNullOrEmpty(f)).Distinct())
                 if (pack.Resolve(f!) is not { } full || !File.Exists(full))
                     problems.Add($"{r.Id}: file '{f}' is missing from the pack.");
+            if (r.Look.Mesh?.File is { } modelFile && pack.Resolve(modelFile) is { } modelPath && File.Exists(modelPath)
+                && GlbPreview.Load(modelPath, out var modelError) == null)
+                problems.Add($"{r.Id}: model '{modelFile}': {modelError}");
             if (r.Look.Mesh?.Prefab is { } mesh && !vanilla.Catalog.ByName.ContainsKey(mesh))
                 problems.Add($"{r.Id}: mesh prefab '{mesh}' isn't in this Valheim install.");
             foreach (var m in r.Look.Materials.Where(m => m.FromPrefab != null && !vanilla.Catalog.ByName.ContainsKey(m.FromPrefab!)))
@@ -175,7 +183,15 @@ internal static class Cli
         var recipe = project.Recipes.FirstOrDefault(r => r.Id == id) ?? throw new InvalidOperationException($"No recipe '{id}' in {packFolder}.");
         using var vanilla = OpenVanilla();
         var basePreview = vanilla.TryLoadPreviewAsync(recipe.Base)?.GetAwaiter().GetResult() ?? throw new InvalidOperationException($"Base '{recipe.Base}' not found.");
-        var model = (recipe.Look.Mesh?.Prefab is { } mesh ? vanilla.TryLoadPreviewAsync(mesh)?.GetAwaiter().GetResult()?.Model : null) ?? basePreview.Model
+        // A model file (look.mesh.file) replaces the base mesh, as in game.
+        var fileModel = recipe.Look.Mesh?.File is { } modelFile
+            ? GlbPreview.Load(project.FullPath(modelFile) ?? throw new InvalidOperationException($"'{modelFile}' is outside the pack."), out var modelError)
+                ?? throw new InvalidOperationException($"'{modelFile}': {modelError}")
+            : null;
+        if (fileModel != null && recipe.Look.Mesh?.File is { } noted)
+            Console.WriteLine($"note: '{noted}' loaded with {fileModel.Parts.Count} part(s).");
+        var model = fileModel
+                    ?? (recipe.Look.Mesh?.Prefab is { } mesh ? vanilla.TryLoadPreviewAsync(mesh)?.GetAwaiter().GetResult()?.Model : null) ?? basePreview.Model
                     ?? throw new InvalidOperationException($"'{recipe.Base}' has no model.");
 
         var parts = new List<ModelPart>();
@@ -184,7 +200,12 @@ internal static class Cli
         else
         {
             if (!recipe.Look.HideMesh)
-                parts.AddRange(model.Parts);
+            {
+                // Hidden meshes are renderer paths on the base model ("rock_a/mesh#0": the part name minus its submesh).
+                var hidden = recipe.Look.HideMeshes.ToHashSet(StringComparer.Ordinal);
+                parts.AddRange(model.Parts.Where(p => !hidden.Contains(p.Name[..Math.Max(0, p.Name.LastIndexOf('#'))])
+                    || recipe.Look.Mesh?.Prefab != null));
+            }
             // Kitbash parts (vanilla looks; per-part material overrides aren't drawn here).
             var partModels = new List<VanillaModel?>();
             for (var i = 0; i < recipe.Look.Parts.Count; i++)
@@ -249,7 +270,9 @@ internal static class Cli
         var pack = PackProject.Open(args[1]);
         var output = args[2];
         var install = ValheimInstall.Find(AppSettings.ValheimPath);
-        var target = AppSettings.PushFolder is { } f ? PushTargets.Custom(f) : PushTargets.Detect(install?.Root).FirstOrDefault(t => t.HasRuntime && t.HasJotunn && !t.IsDevFolder);
+        var target = AppSettings.PushChosen && AppSettings.PushFolder is { } f ? PushTargets.Custom(f)
+            : PushTargets.InstalledIn() != null ? PushTargets.Default()
+            : PushTargets.Detect(install?.Root).FirstOrDefault(t => t.HasRuntime && t.HasJotunn && !t.IsDevFolder);
         var into = args.Contains("--into");
         CodeExportResult result;
         if (args.Contains("--plain") || args.Contains("--libs") || args.Contains("--look-only"))

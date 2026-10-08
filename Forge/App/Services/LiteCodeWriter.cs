@@ -349,7 +349,7 @@ public static class LiteCodeWriter
         }
 
         var look = recipe.Look;
-        if (!look.IsEmpty && (!lookOnly || look.Mesh != null || look.Materials.Count > 0 || look.HideMesh || look.HasScale || look.Parts.Count > 0))
+        if (!look.IsEmpty && (!lookOnly || look.Mesh != null || look.Materials.Count > 0 || look.HideMesh || look.HideMeshes.Count > 0 || look.HasScale || look.Parts.Count > 0))
         {
             L();
             L("// Look");
@@ -364,6 +364,8 @@ public static class LiteCodeWriter
             // After materials, as in Forge: overrides never touch the sprites.
             if (look.HideMesh)
                 L("ForgeLite.HideMesh(prefab);");
+            if (look.HideMeshes.Count > 0)
+                L($"ForgeLite.HideMeshes(prefab, {string.Join(", ", look.HideMeshes.Select(Str))});");
             // Kitbash: model scale, then other prefabs' meshes (each restyled on its own).
             if (look.HasScale)
                 L($"ForgeLite.Scale(prefab, {V(look.Scale)});");

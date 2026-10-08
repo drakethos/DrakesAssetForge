@@ -289,6 +289,25 @@ internal static class Screenshots
                                   $"in list={vm.Workspace.Items.Any(i => i.Recipe.Id == "screens_banner_pole_copy2")}, file exists={File.Exists(doomedPath)}");
             }
 
+            // Hold pose: a key held a little forward and turned, with a rock beside it for scale.
+            var holdKey = new Format.ItemRecipe { Id = "screens_holdkey", Base = "CryptKey", Kind = Format.RecipeKind.Item, Name = "Hold Key" };
+            vm.Pack!.SaveRecipe(holdKey);
+            vm.Workspace.Reload(holdKey);
+            await Settle(window, 4000);
+            if (vm.Workspace.Editor is { } hold)
+            {
+                hold.HoldX = 0.05f;
+                hold.HoldY = -0.08f;
+                hold.HoldZ = 0.1f;
+                hold.HoldRotX = -30f;
+                hold.HoldRotY = 90f;
+                hold.HoldScale = 1.2f;
+                await Settle(window, 2000);
+                Save(window, outDir, "11-hold-pose");
+                hold.SaveNow();
+                Console.WriteLine("hold recipe: " + File.ReadAllText(vm.Pack!.RecipePath(holdKey)).Replace("\n", " ").Replace("  ", ""));
+            }
+
             // Snap tool on a "paper" piece: floor base hidden, a standing sprite, auto-detected points, one dragged up.
             var paper = new Format.ItemRecipe { Id = "screens_paper", Base = "wood_floor_1x1", Kind = Format.RecipeKind.Piece, Name = "Paper" };
             vm.Pack!.SaveRecipe(paper);

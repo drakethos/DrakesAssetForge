@@ -248,6 +248,7 @@ public sealed partial class WorkspaceViewModel : ObservableObject
         var files = new List<string?> { recipe.Look.Icon };
         files.AddRange(recipe.Look.Materials.SelectMany(m => m.Textures.Values));
         files.AddRange(recipe.Look.Sprites.Select(s => s.File));
+        files.Add(recipe.Look.Mesh?.File);
         files.AddRange(recipe.Look.Parts.SelectMany(p => p.Materials).SelectMany(m => m.Textures.Values));
         var count = 0;
         foreach (var relative in files.Where(f => !string.IsNullOrEmpty(f)).Distinct())

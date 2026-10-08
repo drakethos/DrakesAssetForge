@@ -25,6 +25,7 @@ internal static class InstanceSync
 
             CopyEffects(prefab, instance);
             ReplaceChild(prefab, instance, GameNames.VisualChild);
+            HoldPose.CopyToInstance(prefab, instance);
             ReplaceChild(prefab, instance, GameNames.GlowChild);
             ReplaceChild(prefab, instance, GameNames.SpritesChild);
             SyncParts(prefab, instance);
@@ -89,11 +90,14 @@ internal static class InstanceSync
 
     private static void ReplaceChild(GameObject prefab, GameObject instance, string name)
     {
-        LookBaseline.DestroyChild(instance, name);
-        var source = prefab.transform.Find(name);
+        // The visual child lives under the visual root (attach for items); other children under the prefab root.
+        var from = name == GameNames.VisualChild ? Parts.VisualRoot(prefab) : prefab.transform;
+        var to = name == GameNames.VisualChild ? Parts.VisualRoot(instance) : instance.transform;
+        LookBaseline.DestroyChild(to.gameObject, name);
+        var source = from.Find(name);
         if (source == null)
             return;
-        var copy = Object.Instantiate(source.gameObject, instance.transform, false);
+        var copy = Object.Instantiate(source.gameObject, to, false);
         copy.name = name;
     }
 

@@ -30,6 +30,9 @@ public sealed class PushTarget
 
     public static string Sanitize(string s) => new(s.Select(c => char.IsLetterOrDigit(c) || c == '_' ? c : '_').ToArray());
 
+    public static bool SameFolder(string a, string b) =>
+        string.Equals(Path.GetFullPath(a).TrimEnd('\\'), Path.GetFullPath(b).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+
     private static bool ContainsFile(string folder, string file)
     {
         try
@@ -62,6 +65,49 @@ public static class PushTargets
     }
 
     public static PushTarget Dev() => new() { Manager = "Forge", Profile = "dev", Folder = ForgePaths.PushDirectory, IsDevFolder = true };
+
+    /// <summary>
+    /// The BepInEx\plugins folder this app sits inside (installed through Gale, r2modman or Thunderstore), or null when it isn't in one.
+    /// </summary>
+    public static string? InstalledIn()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            if (string.Equals(dir.Name, "plugins", StringComparison.OrdinalIgnoreCase) && dir.Parent is { Name: "BepInEx" })
+                return dir.FullName;
+        return null;
+    }
+
+    /// <summary>The target Push installs into right now: the user's pick, or <see cref="Default"/> until they pick one.</summary>
+    public static PushTarget Current()
+    {
+        if (!AppSettings.PushChosen)
+            return Default();
+        if (AppSettings.PushFolder is { } folder && Directory.Exists(folder))
+            return new PushTarget { Manager = "", Profile = "", Folder = folder, LabelOverride = AppSettings.PushLabel };
+        return Dev();
+    }
+
+    /// <summary>
+    /// What "Push to game" uses until the user picks one: the profile this app was installed into, else Forge's dev folder.
+    /// </summary>
+    public static PushTarget Default()
+    {
+        var home = InstalledIn();
+        if (home == null)
+            return Dev();
+        var profileRoot = Path.GetDirectoryName(Path.GetDirectoryName(home))!;
+        return new PushTarget { Manager = ManagerOf(profileRoot), Profile = Path.GetFileName(profileRoot), Folder = home };
+    }
+
+    /// <summary>Which mod manager a profile belongs to, from where its profiles folder lives.</summary>
+    private static string ManagerOf(string profileRoot)
+    {
+        var parent = Path.GetDirectoryName(profileRoot) ?? "";
+        if (parent.Contains("com.kesomannen.gale", StringComparison.OrdinalIgnoreCase)) return "Gale";
+        if (parent.Contains("r2modmanPlus-local", StringComparison.OrdinalIgnoreCase)) return "r2modman";
+        if (parent.Contains("Thunderstore Mod Manager", StringComparison.OrdinalIgnoreCase)) return "Thunderstore";
+        return "Valheim folder";
+    }
 
     /// <summary>A folder the user picked: a profile root, its BepInEx folder, or the plugins folder itself.</summary>
     public static PushTarget Custom(string folder)

@@ -329,12 +329,41 @@
                                         <Button Grid.Column="2" Classes="small ghost" Content="Clear" Command="{Binding ClearMeshCommand}" IsVisible="{Binding HasMeshSwap}" />
                                     </Grid>
                                     <TextBlock Classes="muted" Text="Keep the base's shape, or show another Valheim prefab's mesh instead." />
+                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,4,0,0">
+                                        <Border Classes="chip"><TextBlock Text="{Binding ModelFileLabel}" TextTrimming="CharacterEllipsis" /></Border>
+                                        <Button Grid.Column="1" Classes="small" Content="Model file (.glb)…" Command="{Binding ChooseModelFileCommand}" />
+                                        <Button Grid.Column="2" Classes="small ghost" Content="Clear" Command="{Binding ClearModelFileCommand}" IsVisible="{Binding HasModelFile}" />
+                                    </Grid>
+                                    <TextBlock Classes="muted" TextWrapping="Wrap" Text="Your own static .glb replaces the base mesh (copied into the pack's models folder). Rigged models show their rest pose." />
+                                    <TextBlock Foreground="{StaticResource WarnBrush}" TextWrapping="Wrap" Text="{Binding ModelFileError}" IsVisible="{Binding HasModelFileError}" />
                                     <Grid ColumnDefinitions="Auto,90,*" ColumnSpacing="8" Margin="0,4,0,0">
                                         <TextBlock Text="Model scale ×" Classes="muted" VerticalAlignment="Center" />
                                         <TextBox Grid.Column="1" Text="{Binding ModelScale}" ToolTip.Tip="Scales the whole model (and its collision); 1 = unchanged" />
                                         <TextBlock Grid.Column="2" Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap"
                                                    Text="Items: held and dropped. Pieces: placed, collision included." />
                                     </Grid>
+                                    <StackPanel Spacing="6" IsVisible="{Binding IsItem}" Margin="0,8,0,0">
+                                        <TextBlock Text="HOLD POSE" Classes="h" />
+                                        <TextBlock Classes="muted" TextWrapping="Wrap" Text="How the item sits in the hand: offsets on Valheim's own pose. Held and dropped both follow it." />
+                                        <Grid ColumnDefinitions="Auto,*,*,*" ColumnSpacing="6">
+                                            <TextBlock Text="Move (m)" Classes="muted" VerticalAlignment="Center" />
+                                            <TextBox Grid.Column="1" Text="{Binding HoldX}" ToolTip.Tip="Move left (−) / right (+)" />
+                                            <TextBox Grid.Column="2" Text="{Binding HoldY}" ToolTip.Tip="Move down (−) / up (+)" />
+                                            <TextBox Grid.Column="3" Text="{Binding HoldZ}" ToolTip.Tip="Move back (−) / forward (+)" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="Auto,*,*,*" ColumnSpacing="6">
+                                            <TextBlock Text="Turn (°)" Classes="muted" VerticalAlignment="Center" />
+                                            <TextBox Grid.Column="1" Text="{Binding HoldRotX}" ToolTip.Tip="Tilt forward / back" />
+                                            <TextBox Grid.Column="2" Text="{Binding HoldRotY}" ToolTip.Tip="Turn left / right" />
+                                            <TextBox Grid.Column="3" Text="{Binding HoldRotZ}" ToolTip.Tip="Roll (twist the handle)" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="Auto,90,*,Auto" ColumnSpacing="6">
+                                            <TextBlock Text="Scale ×" Classes="muted" VerticalAlignment="Center" />
+                                            <TextBox Grid.Column="1" Text="{Binding HoldScale}" ToolTip.Tip="Multiplies the held size; 1 = unchanged" />
+                                            <CheckBox Grid.Column="2" Content="Show a rock (~1 m) beside it for scale" IsChecked="{Binding ShowReference}" VerticalAlignment="Center" />
+                                            <Button Grid.Column="3" Classes="small ghost" Content="Reset" Command="{Binding ResetHoldCommand}" />
+                                        </Grid>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                             <!-- Kitbashing: other prefabs' meshes on this model -->
@@ -435,6 +464,18 @@
                                     </ItemsControl>
                                     <CheckBox Content="Hide the base model (sprites only)" IsChecked="{Binding HideMesh}"
                                               ToolTip.Tip="The base's mesh stops drawing; its collision and hitbox stay." />
+                                    <StackPanel Spacing="4" IsVisible="{Binding HasMeshRows}">
+                                        <TextBlock Text="HIDE MESHES" Classes="h" />
+                                        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Tick a mesh to remove it from the base model, like one rock from a cluster. Collision stays." />
+                                        <ItemsControl ItemsSource="{Binding MeshRows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:MeshToggleRow">
+                                                    <CheckBox Content="{Binding Label}" IsChecked="{Binding IsHidden}" Margin="0,2"
+                                                              ToolTip.Tip="{Binding MeshName, StringFormat='Mesh: {0}'}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                             <Border Classes="section" IsVisible="{Binding HasEffects}">

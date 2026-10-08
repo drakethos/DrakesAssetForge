@@ -107,7 +107,7 @@ BronzeBuilds/
   "description": "…",
 
   "look": {
-    "mesh": { "prefab": "wood_gate" },          // show another prefab's mesh (static meshes, LOD0)
+    "mesh": { "prefab": "wood_gate" },          // show another prefab's mesh (static meshes, LOD0); or { "file": "models/box.glb" } for your own .glb
     "materials": [
       {
         "target": "iron_grate_bars",            // match by material name…  or "slot": 0 …  or neither = all slots
@@ -123,6 +123,7 @@ BronzeBuilds/
       { "file": "textures/banner.png", "size": [0.6, 1.2], "position": [0, 0.5, 0.12], "rotation": [0, 0, 0], "doubleSided": true }
     ],
     "hideMesh": false,                          // true: only parts and sprites show (colliders stay)
+    "hideMeshes": ["New/Cube.030_Cube.001"],    // base meshes to remove, by renderer path (run inspect <prefab> to list them)
     "scale": 1.5,                               // whole model (or [x, y, z]); items: held + dropped, pieces: incl. collision
     "parts": [                                  // kitbash: other prefabs' meshes, positioned in this prefab's space
       { "prefab": "TrophySkeleton", "child": "skull",     // child: only meshes whose name contains it (optional)

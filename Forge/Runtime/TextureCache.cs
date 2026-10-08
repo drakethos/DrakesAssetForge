@@ -67,6 +67,18 @@ internal sealed class TextureCache
         return texture;
     }
 
+    /// <summary>A PNG/JPG held in memory (a model file's embedded texture). Not cached: the model is read once per apply.</summary>
+    public Texture2D? LoadBytes(byte[] bytes, string label, List<string> warnings)
+    {
+        var texture = new Texture2D(2, 2, TextureFormat.RGBA32, true) { name = label };
+        if (!LoadImage(texture, bytes))
+        {
+            warnings.Add($"'{label}' is not a readable PNG or JPG");
+            return null;
+        }
+        return texture;
+    }
+
     public Sprite? LoadSprite(string? fullPath, string label, List<string> warnings)
     {
         if (fullPath != null && _sprites.TryGetValue(fullPath, out var cached))

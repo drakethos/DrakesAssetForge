@@ -22,6 +22,10 @@ public static class PrefabReader
         public bool ActiveWorn { get; init; }
         public int Tag { get; init; }
         public required Matrix4x4 ToRoot { get; init; }
+        /// <summary>The node's own local position, rotation and scale (its Transform component).</summary>
+        public Vector3 LocalPosition { get; init; }
+        public Quaternion LocalRotation { get; init; } = Quaternion.Identity;
+        public Vector3 LocalScale { get; init; } = Vector3.One;
         public required List<AssetExternal> Components { get; init; }
     }
 
@@ -83,6 +87,8 @@ public static class PrefabReader
 
             return new PrefabInfo
             {
+                Attach = nodes.FirstOrDefault(n => n.Path == "attach") is { } attach
+                    ? new AttachPose(attach.LocalPosition, attach.LocalRotation, attach.LocalScale) : null,
                 Name = rootGo["m_Name"].AsString,
                 Scripts = scripts,
                 Renderers = renderers,
@@ -185,7 +191,14 @@ public static class PrefabReader
             var activeWorn = parentActiveWorn && (selfActive || path == WornRoot);
             // The root's own transform is where it's placed in the world; everything is relative to it.
             var toRoot = isRoot || transform == null ? Matrix4x4.Identity : LocalMatrix(transform.Value.baseField) * parentToRoot;
-            nodes.Add(new Node { Path = path, Active = active, ActiveWorn = activeWorn, ToRoot = toRoot, Components = components, Tag = go["m_Tag"].IsDummy ? 0 : go["m_Tag"].AsInt });
+            var local = transform?.baseField;
+            nodes.Add(new Node
+            {
+                Path = path, Active = active, ActiveWorn = activeWorn, ToRoot = toRoot, Components = components, Tag = go["m_Tag"].IsDummy ? 0 : go["m_Tag"].AsInt,
+                LocalPosition = local == null ? Vector3.Zero : new Vector3(local["m_LocalPosition"]["x"].AsFloat, local["m_LocalPosition"]["y"].AsFloat, local["m_LocalPosition"]["z"].AsFloat),
+                LocalRotation = local == null ? Quaternion.Identity : new Quaternion(local["m_LocalRotation"]["x"].AsFloat, local["m_LocalRotation"]["y"].AsFloat, local["m_LocalRotation"]["z"].AsFloat, local["m_LocalRotation"]["w"].AsFloat),
+                LocalScale = local == null ? Vector3.One : new Vector3(local["m_LocalScale"]["x"].AsFloat, local["m_LocalScale"]["y"].AsFloat, local["m_LocalScale"]["z"].AsFloat),
+            });
 
             if (transform == null)
                 return;

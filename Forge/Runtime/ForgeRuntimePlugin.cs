@@ -15,7 +15,7 @@ public sealed class ForgeRuntimePlugin : BaseUnityPlugin
 {
     public const string Guid = "com.drakesworkshop.forgeruntime";
     public const string Name = "DrakesForgeRuntime";
-    public const string Version = "0.3.0";
+    public const string Version = "0.4.0";
 
     private void Awake()
     {

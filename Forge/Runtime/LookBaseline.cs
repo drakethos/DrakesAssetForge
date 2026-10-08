@@ -21,6 +21,8 @@ internal sealed class LookBaseline
     private SnapPoints.Snapshot? _snaps;
     private Effects.Snapshot _effects = new();
     private Vector3 _visualScale = Vector3.one;
+    private Vector3 _visualPosition;
+    private Quaternion _visualRotation = Quaternion.identity;
 
     public static LookBaseline Capture(GameObject prefab)
     {
@@ -40,7 +42,10 @@ internal sealed class LookBaseline
         }
 
         baseline._effects = Effects.Capture(prefab);
-        baseline._visualScale = Parts.VisualRoot(prefab).localScale;
+        var visual = Parts.VisualRoot(prefab);
+        baseline._visualScale = visual.localScale;
+        baseline._visualPosition = visual.localPosition;
+        baseline._visualRotation = visual.localRotation;
         ByPrefab[prefab] = baseline;
         return baseline;
     }
@@ -70,10 +75,14 @@ internal sealed class LookBaseline
     public void Restore(GameObject prefab)
     {
         DestroyChild(prefab, GameNames.VisualChild);
+        DestroyChild(Parts.VisualRoot(prefab).gameObject, GameNames.VisualChild);
         DestroyChild(prefab, GameNames.GlowChild);
         DestroyChild(prefab, GameNames.SpritesChild);
         Parts.Remove(prefab);
-        Parts.VisualRoot(prefab).localScale = _visualScale;
+        var visual = Parts.VisualRoot(prefab);
+        visual.localPosition = _visualPosition;
+        visual.localRotation = _visualRotation;
+        visual.localScale = _visualScale;
         Effects.Restore(_effects);
 
         foreach (var (renderer, materials, enabled) in _renderers)

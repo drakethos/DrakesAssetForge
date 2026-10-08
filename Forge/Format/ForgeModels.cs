@@ -75,6 +75,8 @@ public sealed class LookRecipe
     public List<SpriteRecipe> Sprites { get; set; } = new();
     /// <summary>Hide the base's own mesh, e.g. when sprites replace it. Colliders stay.</summary>
     public bool HideMesh { get; set; }
+    /// <summary>Renderers of the base model to hide, by their path under the prefab root ("rock_a/mesh"). Hidden meshes are gone from the game and the preview.</summary>
+    public List<string> HideMeshes { get; set; } = new();
     /// <summary>Scales the whole placed/dropped model, colliders included (1 = unchanged).</summary>
     public Vec3 Scale { get; set; } = new(1, 1, 1);
     /// <summary>Kitbashing: meshes borrowed from other vanilla prefabs, placed on this one.</summary>
@@ -82,7 +84,16 @@ public sealed class LookRecipe
 
     public bool HasScale => Scale.X != 1 || Scale.Y != 1 || Scale.Z != 1;
 
-    public bool IsEmpty => Mesh == null && Materials.Count == 0 && Icon == null && Sprites.Count == 0 && !HideMesh && !HasScale && Parts.Count == 0;
+    /// <summary>Items: how the held item sits, as offsets on the vanilla attach pose (position in the prefab's space, rotation in degrees, scale multiplies).</summary>
+    public Vec3 HoldPosition { get; set; }
+    public Vec3 HoldRotation { get; set; }
+    public Vec3 HoldScale { get; set; } = new Vec3(1, 1, 1);
+    public bool HasHold =>
+        HoldPosition.X != 0 || HoldPosition.Y != 0 || HoldPosition.Z != 0 ||
+        HoldRotation.X != 0 || HoldRotation.Y != 0 || HoldRotation.Z != 0 ||
+        HoldScale.X != 1 || HoldScale.Y != 1 || HoldScale.Z != 1;
+
+    public bool IsEmpty => Mesh == null && Materials.Count == 0 && Icon == null && Sprites.Count == 0 && !HideMesh && HideMeshes.Count == 0 && !HasScale && Parts.Count == 0 && !HasHold;
 }
 
 /// <summary>

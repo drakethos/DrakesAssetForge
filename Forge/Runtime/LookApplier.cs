@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using DrakesForge.Format;
 using Jotunn.Managers;
@@ -14,10 +15,109 @@ internal static class LookApplier
     public static IEnumerable<Renderer> VisualRenderers(GameObject root) =>
         root.GetComponentsInChildren<Renderer>(true).Where(r => r is MeshRenderer || r is SkinnedMeshRenderer);
 
+    /// <summary>
+    /// Replaces the base mesh with a .glb from the pack (look.mesh.file). Each submesh becomes its own child renderer,
+    /// textured from the file's base colour image. Material is a copy of the base's own, so it keeps the vanilla shader.
+    /// </summary>
+    private static void ApplyModelFile(GameObject prefab, string file, LoadedPack pack, TextureCache textures, List<string> warnings)
+    {
+        GlbModel model;
+        try
+        {
+            model = GlbReader.Read(File.ReadAllBytes(Path.Combine(pack.Root, file)));
+        }
+        catch (Exception ex) when (ex is GlbException or IOException or UnauthorizedAccessException)
+        {
+            warnings.Add($"look.mesh.file '{file}': {ex.Message}");
+            return;
+        }
+        foreach (var warning in model.Warnings)
+            warnings.Add($"look.mesh.file '{file}': {warning}");
+
+        var donors = VisualRenderers(prefab).ToList();
+        var template = donors.SelectMany(r => r.sharedMaterials).FirstOrDefault(m => m != null);
+        foreach (var donor in donors)
+            donor.enabled = false;
+
+        // Under the visual root (attach for items), so held items show the model as well as dropped ones.
+        var visual = new GameObject(GameNames.VisualChild);
+        visual.transform.SetParent(Parts.VisualRoot(prefab), false);
+
+        // Named as the app names them (its material list), so material overrides can target "glb default" etc.
+        var materials = model.Materials.Select((m, i) => GlbMaterial(m, m.Name ?? $"glb material {i}", template, textures, file, warnings)).ToList();
+        var fallback = GlbMaterial(new GlbMaterial(), "glb default", template, textures, file, warnings);
+        for (var i = 0; i < model.Submeshes.Count; i++)
+        {
+            var sub = model.Submeshes[i];
+            var part = new GameObject($"glb{i}_{sub.Name ?? "mesh"}");
+            part.transform.SetParent(visual.transform, false);
+
+            var mesh = new Mesh { name = part.name, indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            mesh.vertices = Vectors(sub.Positions);
+            if (sub.Normals.Length > 0)
+                mesh.normals = Vectors(sub.Normals);
+            if (sub.Uvs.Length > 0)
+                mesh.uv = Uvs(sub.Uvs);
+            mesh.triangles = sub.Indices;
+            if (sub.Normals.Length == 0)
+                mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            part.AddComponent<MeshFilter>().sharedMesh = mesh;
+            part.AddComponent<MeshRenderer>().sharedMaterial = sub.Material >= 0 && sub.Material < materials.Count ? materials[sub.Material] : fallback;
+        }
+    }
+
+    private static Material GlbMaterial(DrakesForge.Format.GlbMaterial source, string name, Material? template, TextureCache textures, string file, List<string> warnings)
+    {
+        var material = template != null ? new Material(template) : new Material(Shader.Find("Standard"));
+        material.name = name;
+        if (material.HasProperty("_Color") && source.BaseColor.Length == 4)
+            material.SetColor("_Color", new Color(source.BaseColor[0], source.BaseColor[1], source.BaseColor[2], source.BaseColor[3]));
+        if (material.HasProperty("_MainTex"))
+            material.SetTexture("_MainTex", source.BaseColorImage != null ? textures.LoadBytes(source.BaseColorImage, $"{file} texture", warnings) : null);
+        return material;
+    }
+
+    private static Vector3[] Vectors(float[] xyz)
+    {
+        var result = new Vector3[xyz.Length / 3];
+        for (var i = 0; i < result.Length; i++)
+            result[i] = new Vector3(xyz[i * 3], xyz[i * 3 + 1], xyz[i * 3 + 2]);
+        return result;
+    }
+
+    private static Vector2[] Uvs(float[] uv)
+    {
+        var result = new Vector2[uv.Length / 2];
+        for (var i = 0; i < result.Length; i++)
+            result[i] = new Vector2(uv[i * 2], uv[i * 2 + 1]);
+        return result;
+    }
+
+    /// <summary>Turns off the base model's renderers listed by path ("rock_a/mesh", as the app writes them).</summary>
+    internal static void HideMeshes(GameObject prefab, List<string> paths)
+    {
+        if (paths.Count == 0)
+            return;
+        var wanted = new HashSet<string>(paths, StringComparer.Ordinal);
+        foreach (var renderer in VisualRenderers(prefab))
+            if (wanted.Contains(RelativePath(renderer.transform, prefab.transform)))
+                renderer.enabled = false;
+    }
+
+    private static string RelativePath(Transform t, Transform root)
+    {
+        var path = "";
+        for (; t != null && t != root; t = t.parent)
+            path = path.Length == 0 ? t.name : t.name + "/" + path;
+        return path;
+    }
+
     public static void Apply(GameObject prefab, LookRecipe look, LoadedPack pack, TextureCache textures, List<string> warnings)
     {
         if (look.Mesh != null)
-            ApplyMesh(prefab, look.Mesh, warnings);
+            ApplyMesh(prefab, look.Mesh, pack, textures, warnings);
         var bodyOverrides = look.Materials.Where(m => m.Target == MaterialOverride.ArmorTarget).ToList();
         var meshOverrides = look.Materials.Where(m => m.Target != MaterialOverride.ArmorTarget).ToList();
         if (meshOverrides.Count > 0)
@@ -31,15 +131,17 @@ internal static class LookApplier
         if (look.HideMesh)
             foreach (var renderer in VisualRenderers(prefab))
                 renderer.enabled = false;
+        HideMeshes(prefab, look.HideMeshes);
         Parts.Apply(prefab, look, pack, textures, warnings);
+        HoldPose.Apply(prefab, look);
         Sprites.Apply(prefab, look, pack, textures, warnings);
     }
 
-    private static void ApplyMesh(GameObject prefab, MeshSource mesh, List<string> warnings)
+    private static void ApplyMesh(GameObject prefab, MeshSource mesh, LoadedPack pack, TextureCache textures, List<string> warnings)
     {
         if (mesh.File != null)
         {
-            warnings.Add($"look.mesh.file '{mesh.File}': model files aren't supported by this runtime version yet");
+            ApplyModelFile(prefab, mesh.File, pack, textures, warnings);
             return;
         }
 
@@ -60,7 +162,7 @@ internal static class LookApplier
             donor.enabled = false;
 
         var visual = new GameObject(GameNames.VisualChild);
-        visual.transform.SetParent(prefab.transform, false);
+        visual.transform.SetParent(Parts.VisualRoot(prefab), false);
 
         var srcRoot = source.transform;
         var copied = 0;

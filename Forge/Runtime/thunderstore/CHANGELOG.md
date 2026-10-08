@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- `look.mesh.file`: a pack's own static `.glb` replaces the base mesh. Each submesh gets its base colour texture; rigged models use their rest pose. Warnings are logged, and the base mesh stays if the file can't be read.
+- `look.hold`: offsets on an item's held pose (position, rotation in degrees, scale). Applies to the item's attach child, so held and dropped items both follow it; placed and dropped copies sync on hot reload.
+- Fix: the model file and borrowed meshes sit under the item's visual root, so held items show them.
+- Fix: a material override on a model file matches its slot by name (`glb default`, or the file's material name), so textures and tints apply.
+
 ## 0.3.0
 
 - Fix: costs naming a missing item no longer leave an empty requirement (which crashed removing the piece): a pack item's display name is mapped to its id, anything unknown is left out with a warning, and empty entries are stripped after registration.

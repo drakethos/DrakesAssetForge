@@ -197,11 +197,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Where Push installs packs (a profile's plugins folder, or Forge's dev folder by default).</summary>
-    public PushTarget CurrentPushTarget =>
-        AppSettings.PushFolder is { } folder && Directory.Exists(folder)
-            ? new PushTarget { Manager = "", Profile = "", Folder = folder, LabelOverride = AppSettings.PushLabel }
-            : PushTargets.Dev();
+    /// <summary>Where Push installs packs: the user's pick, else the profile this app lives in, else Forge's dev folder.</summary>
+    public PushTarget CurrentPushTarget => PushTargets.Current();
 
     public string PushTargetLabel => $"Push installs to {CurrentPushTarget.Label}";
 

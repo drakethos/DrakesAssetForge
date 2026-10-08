@@ -261,6 +261,20 @@ internal static class ForgeLite
             renderer.enabled = false;
     }
 
+    /// <summary>Stops the named meshes (renderer paths under the prefab root, "rock_a/mesh") drawing, as the app's Hide meshes does.</summary>
+    internal static void HideMeshes(GameObject prefab, params string[] paths)
+    {
+        var wanted = new HashSet<string>(paths, StringComparer.Ordinal);
+        foreach (var renderer in Renderers(prefab))
+        {
+            var path = "";
+            for (var t = renderer.transform; t != null && t != prefab.transform; t = t.parent)
+                path = path.Length == 0 ? t.name : t.name + "/" + path;
+            if (wanted.Contains(path))
+                renderer.enabled = false;
+        }
+    }
+
     private static Material? _spriteTemplate;
 
     /// <summary>

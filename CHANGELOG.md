@@ -5,6 +5,13 @@ Two things release from this repo, each with its own version and tag:
 - **Drakes Asset Forge** (the desktop app): tags `app-v*`
 - **Drakes Forge Runtime** (the BepInEx mod packs need): tags `runtime-v*`, changelog in [Forge/Runtime/thunderstore/CHANGELOG.md](Forge/Runtime/thunderstore/CHANGELOG.md)
 
+## App 0.4.0
+
+- **Hold pose** (items): Look tab section to move, turn and scale how the item sits in the hand, as offsets on Valheim's own pose. Held and dropped both follow it. A stone block about 1 m beside the item gives the size. Stored as `look.hold`; needs Forge Runtime 0.4.0.
+- Fix: a model file now shows in hand as well as on the floor (it sits under the item's visual root, like kitbash parts). Material overrides on a model file find their slots (`glb default` and the file's own material names).
+- **Custom models**: Look tab, Model file (.glb) replaces the base mesh with your own static .glb, copied into the pack's `models` folder. Each submesh gets its base colour texture from the file. Needs Forge Runtime with model file support. Rigged models use their rest pose. `validate` and `render` read the file too.
+- **Hide meshes**: the Look tab lists the base model's meshes; tick one to remove it from the game and the preview (a rock from a cluster, one bar of a gate). Stored as `look.hideMeshes`; needs Forge Runtime with hideMeshes support. `inspect <prefab>` lists the mesh paths, and `render` honours them.
+
 ## App 0.3.1
 
 - Hexium package fix: it now ships `DrakesAssetForge.pdb` next to the exe (Hexium rejects native binaries without one), and depends on the Forge Runtime version actually released (0.3.0). No app changes since 0.3.0.

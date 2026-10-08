@@ -363,7 +363,15 @@ public static class RecipeSerializer
             result.Materials = ReadMaterials(materials, "look.materials", problems);
 
         result.HideMesh = look["hideMesh"]?.AsBool() ?? false;
+        if (look["hideMeshes"] is { IsArray: true } hidden)
+            result.HideMeshes = hidden.Items.Select(h => h.AsString()).Where(h => h != null).Select(h => h!).ToList();
         result.Scale = ReadScale(look["scale"], "look.scale", problems);
+        if (look["hold"] is { IsObject: true } hold)
+        {
+            result.HoldPosition = ReadVec(hold["position"], "look.hold.position", problems);
+            result.HoldRotation = ReadVec(hold["rotation"], "look.hold.rotation", problems);
+            result.HoldScale = ReadScale(hold["scale"], "look.hold.scale", problems);
+        }
         if (look["parts"] is { IsArray: true } parts)
         {
             foreach (var part in parts.Items)
@@ -424,6 +432,18 @@ public static class RecipeSerializer
             return new Vec3((float)uniform, (float)uniform, (float)uniform);
         var v = ReadVector(value, 3, what, problems);
         return v == null ? new Vec3(1, 1, 1) : new Vec3(v[0], v[1], v[2]);
+    }
+
+    private static Vec3 ReadVec(JsonValue? value, string what, List<string> problems)
+    {
+        if (value == null)
+            return default;
+        if (!value.IsArray || value.Items.Count != 3 || value.Items.Any(i => i.AsNumber() == null))
+        {
+            problems.Add($"{what} needs three numbers, e.g. [0, 0.1, 0].");
+            return default;
+        }
+        return new Vec3((float)value.Items[0].AsNumber()!.Value, (float)value.Items[1].AsNumber()!.Value, (float)value.Items[2].AsNumber()!.Value);
     }
 
     private static JsonValue WriteScale(Vec3 v) =>
@@ -573,8 +593,26 @@ public static class RecipeSerializer
 
         if (look.HideMesh)
             obj.Set("hideMesh", true);
+        if (look.HideMeshes.Count > 0)
+        {
+            var arr = JsonValue.NewArray();
+            foreach (var path in look.HideMeshes)
+                arr.Add(path);
+            obj.Set("hideMeshes", arr);
+        }
         if (look.HasScale)
             obj.Set("scale", WriteScale(look.Scale));
+        if (look.HasHold)
+        {
+            var hold = JsonValue.NewObject();
+            if (look.HoldPosition.X != 0 || look.HoldPosition.Y != 0 || look.HoldPosition.Z != 0)
+                hold.Set("position", Vector(look.HoldPosition.X, look.HoldPosition.Y, look.HoldPosition.Z));
+            if (look.HoldRotation.X != 0 || look.HoldRotation.Y != 0 || look.HoldRotation.Z != 0)
+                hold.Set("rotation", Vector(look.HoldRotation.X, look.HoldRotation.Y, look.HoldRotation.Z));
+            if (look.HoldScale.X != 1 || look.HoldScale.Y != 1 || look.HoldScale.Z != 1)
+                hold.Set("scale", WriteScale(look.HoldScale));
+            obj.Set("hold", hold);
+        }
         if (look.Parts.Count > 0)
         {
             var arr = JsonValue.NewArray();

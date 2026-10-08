@@ -20,6 +20,8 @@ public sealed class PrefabInfo
     public PieceCost? PieceCost { get; init; }
     /// <summary>Chest/legs armour: the material Valheim paints onto the player's body when worn (ItemDrop m_armorMaterial).</summary>
     public MaterialInfo? ArmorMaterial { get; init; }
+    /// <summary>The item's "attach" child: where a held item sits in the hand. Null if the prefab has none.</summary>
+    public AttachPose? Attach { get; init; }
     /// <summary>"_snappoint" children, local to the root, in Unity's axes.</summary>
     public IReadOnlyList<Vector3> SnapPoints { get; init; } = Array.Empty<Vector3>();
 
@@ -28,6 +30,9 @@ public sealed class PrefabInfo
     /// <summary>Material slots in the order Forge Runtime counts them (renderers in hierarchy order).</summary>
     public IEnumerable<MaterialInfo> MaterialSlots => Renderers.SelectMany(r => r.Materials);
 }
+
+/// <summary>Local position, rotation and scale of a prefab's "attach" child, in Unity's axes.</summary>
+public sealed record AttachPose(System.Numerics.Vector3 Position, System.Numerics.Quaternion Rotation, System.Numerics.Vector3 Scale);
 
 public sealed class PieceCost
 {

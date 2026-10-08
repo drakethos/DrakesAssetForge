@@ -79,6 +79,7 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         _name = recipe.Name ?? "";
         _description = recipe.Description ?? "";
         _meshFrom = recipe.Look.Mesh?.Prefab ?? "";
+        _modelFile = recipe.Look.Mesh?.File ?? "";
         _iconFile = recipe.Look.Icon ?? "";
 
         var glow = recipe.Behaviours.FirstOrDefault(b => b.Type.Equals("glow", StringComparison.OrdinalIgnoreCase));
@@ -108,6 +109,13 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         Components = new ComponentsPanel(ScheduleSave);
 
         _hideMesh = recipe.Look.HideMesh;
+        _holdX = recipe.Look.HoldPosition.X;
+        _holdY = recipe.Look.HoldPosition.Y;
+        _holdZ = recipe.Look.HoldPosition.Z;
+        _holdRotX = recipe.Look.HoldRotation.X;
+        _holdRotY = recipe.Look.HoldRotation.Y;
+        _holdRotZ = recipe.Look.HoldRotation.Z;
+        _holdScale = recipe.Look.HoldScale.X;
         _modelScale = Math.Round(recipe.Look.Scale.X, 4);
         if (recipe.Look.Scale.X != recipe.Look.Scale.Y || recipe.Look.Scale.Y != recipe.Look.Scale.Z)
             _modelScaleVector = recipe.Look.Scale;
@@ -184,6 +192,137 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     public ObservableCollection<MaterialEditor> Materials { get; } = new();
     [ObservableProperty] private MaterialEditor? _selectedMaterial;
     [ObservableProperty] private string _meshFrom;
+
+    // A .glb in the pack that replaces the base mesh (look.mesh.file). Exclusive with MeshFrom.
+    [ObservableProperty] private string _modelFile = "";
+    [ObservableProperty] private string _modelFileError = "";
+    private VanillaModel? _fileModel;
+
+    public string ModelFileLabel => ModelFile.Length == 0 ? "None" : ModelFile;
+    public bool HasModelFile => ModelFile.Length > 0;
+    public bool HasModelFileError => ModelFileError.Length > 0;
+
+    partial void OnModelFileErrorChanged(string value) => OnPropertyChanged(nameof(HasModelFileError));
+
+    // Hold pose (items): how the held item sits, as offsets on Valheim's own attach pose. See HoldDelta.
+    [ObservableProperty] private float _holdX;
+    [ObservableProperty] private float _holdY;
+    [ObservableProperty] private float _holdZ;
+    [ObservableProperty] private float _holdRotX;
+    [ObservableProperty] private float _holdRotY;
+    [ObservableProperty] private float _holdRotZ;
+    [ObservableProperty] private float _holdScale = 1f;
+    [ObservableProperty] private bool _showReference = true;
+    private IReadOnlyList<ModelPart> _referenceParts = Array.Empty<ModelPart>();
+
+    partial void OnHoldXChanged(float value) => HoldChanged();
+    partial void OnHoldYChanged(float value) => HoldChanged();
+    partial void OnHoldZChanged(float value) => HoldChanged();
+    partial void OnHoldRotXChanged(float value) => HoldChanged();
+    partial void OnHoldRotYChanged(float value) => HoldChanged();
+    partial void OnHoldRotZChanged(float value) => HoldChanged();
+    partial void OnHoldScaleChanged(float value) => HoldChanged();
+    partial void OnShowReferenceChanged(bool value) => HoldChanged();
+
+    private void HoldChanged()
+    {
+        if (_loading)
+            return;
+        Refresh();
+        ScheduleSave();
+    }
+
+    [RelayCommand]
+    private void ResetHold()
+    {
+        _holdX = _holdY = _holdZ = _holdRotX = _holdRotY = _holdRotZ = 0;
+        _holdScale = 1;
+        OnPropertyChanged(nameof(HoldX));
+        OnPropertyChanged(nameof(HoldY));
+        OnPropertyChanged(nameof(HoldZ));
+        OnPropertyChanged(nameof(HoldRotX));
+        OnPropertyChanged(nameof(HoldRotY));
+        OnPropertyChanged(nameof(HoldRotZ));
+        OnPropertyChanged(nameof(HoldScale));
+        HoldChanged();
+    }
+
+    /// <summary>
+    /// The hold offset in the prefab's own (Unity) space: from the vanilla attach pose to the pose the runtime builds
+    /// (position added, rotation multiplied by Euler(hold), scale multiplied). Null when there's nothing to apply.
+    /// </summary>
+    private Matrix4x4? HoldDelta()
+    {
+        if (!IsItem || _base?.Info.Attach is not { } pose)
+            return null;
+        if (HoldX == 0 && HoldY == 0 && HoldZ == 0 && HoldRotX == 0 && HoldRotY == 0 && HoldRotZ == 0 && HoldScale == 1)
+            return null;
+        var vanilla = Trs(pose.Position, pose.Rotation, pose.Scale);
+        var held = Trs(pose.Position + new Vector3(HoldX, HoldY, HoldZ),
+            pose.Rotation * UnityEuler(HoldRotX, HoldRotY, HoldRotZ),
+            pose.Scale * new Vector3(HoldScale, HoldScale, HoldScale));
+        Matrix4x4.Invert(vanilla, out var inverse);
+        return inverse * held;
+    }
+
+    private static Matrix4x4 Trs(Vector3 position, Quaternion rotation, Vector3 scale) =>
+        Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(position);
+
+    /// <summary>Unity's Quaternion.Euler: Y, then X, then Z applied (q = qy * qx * qz).</summary>
+    private static Quaternion UnityEuler(float x, float y, float z) =>
+        Quaternion.CreateFromAxisAngle(Vector3.UnitY, ToRadians(y)) *
+        Quaternion.CreateFromAxisAngle(Vector3.UnitX, ToRadians(x)) *
+        Quaternion.CreateFromAxisAngle(Vector3.UnitZ, ToRadians(z));
+
+    private static float ToRadians(float degrees) => degrees * MathF.PI / 180f;
+
+    /// <summary>The viewport draws parts mirrored in X (see PartRow.Transform); this converts a Unity-space transform to that frame.</summary>
+    private static Matrix4x4 ToViewport(Matrix4x4 unity)
+    {
+        var mirror = Matrix4x4.CreateScale(-1, 1, 1);
+        return mirror * unity * mirror;
+    }
+
+    private async Task LoadReferenceAsync()
+    {
+        _referenceParts = Array.Empty<ModelPart>();
+        // Rocks in the world aren't in the item/piece catalog; a one-metre stone block is, and works as the scale reference.
+        var rock = new[] { "stone_wall_1x1", "stone_pillar" }.FirstOrDefault(n => Vanilla?.Catalog.ByName.ContainsKey(n) == true);
+        if (rock == null || Vanilla?.TryLoadPreviewAsync(rock) is not { } task)
+            return;
+        try
+        {
+            _referenceParts = (await task)?.Model?.Parts.ToList() ?? new List<ModelPart>();
+        }
+        catch (Exception)
+        {
+            // Without a reference the helper still works; it just has no rock.
+        }
+        Refresh();
+    }
+
+    partial void OnModelFileChanged(string value)
+    {
+        if (value.Length > 0 && MeshFrom.Length > 0)
+            MeshFrom = "";
+        OnPropertyChanged(nameof(MeshLabel));
+        OnPropertyChanged(nameof(ModelFileLabel));
+        OnPropertyChanged(nameof(HasModelFile));
+        LoadFileModel();
+        BuildMaterialEditors();
+        Refresh();
+        ScheduleSave();
+    }
+
+    private void LoadFileModel()
+    {
+        _fileModel = null;
+        ModelFileError = "";
+        if (ModelFile.Length == 0 || Pack?.FullPath(ModelFile) is not { } path)
+            return;
+        _fileModel = GlbPreview.Load(path, out var error);
+        ModelFileError = error ?? "";
+    }
     [ObservableProperty] private string _iconFile;
     [ObservableProperty] private Bitmap? _iconImage;
     [ObservableProperty] private string _scripts = "";
@@ -192,6 +331,38 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     public ObservableCollection<SpriteRow> Sprites { get; } = new();
     [ObservableProperty] private bool _hideMesh;
     public bool HasSprites => Sprites.Count > 0;
+
+    // Individual meshes of the base model (rocks in a cluster, a bit of a chest), ticked to hide.
+    public ObservableCollection<MeshToggleRow> MeshRows { get; } = new();
+    public bool HasMeshRows => MeshRows.Count > 1;
+
+    private void BuildMeshRows(PrefabInfo info)
+    {
+        MeshRows.Clear();
+        var hidden = new HashSet<string>(Recipe.Look.HideMeshes, StringComparer.Ordinal);
+        foreach (var renderer in info.Renderers.Where(r => r.MeshName != "(none)"))
+            MeshRows.Add(new MeshToggleRow(renderer.Path, renderer.MeshName, hidden.Contains(renderer.Path), OnMeshToggled));
+        OnPropertyChanged(nameof(HasMeshRows));
+    }
+
+    private void OnMeshToggled()
+    {
+        if (_loading)
+            return;
+        Refresh();
+        ScheduleSave();
+    }
+
+    /// <summary>A model part is named "{renderer path}#{submesh}"; this gives back the renderer path.</summary>
+    private static string RendererPath(string partName)
+    {
+        var hash = partName.LastIndexOf('#');
+        return hash < 0 ? partName : partName[..hash];
+    }
+
+    /// <summary>Paths of the base model's meshes that are hidden right now.</summary>
+    private HashSet<string> HiddenMeshPaths() =>
+        MeshRows.Where(r => r.IsHidden).Select(r => r.Path).ToHashSet(StringComparer.Ordinal);
 
     partial void OnHideMeshChanged(bool value)
     {
@@ -555,12 +726,15 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         }
 
         Scripts = string.Join(" · ", _base.Info.Scripts);
+        BuildMeshRows(_base.Info);
         DescribeEffects(_base.Info);
         _ = Components.BuildAsync(_base.Info, Recipe.Fields, Recipe.RemoveComponents, Recipe.AddComponents.Select(a => a.Type),
             Vanilla == null ? null : Vanilla.ComponentDefaultsAsync, Vanilla == null ? null : Vanilla.ValheimScriptsAsync);
         BaseSnapText = _base.Info.SnapPoints.Count == 0
             ? "The base has no snap points."
             : $"The base has {_base.Info.SnapPoints.Count}: {string.Join("  ", _base.Info.SnapPoints.Select(p => $"({p.X:0.##}, {p.Y:0.##}, {p.Z:0.##})"))}";
+        LoadFileModel();
+        _ = LoadReferenceAsync();
         await LoadMeshSourceAsync();
         BuildMaterialEditors();
         LoadIcon();
@@ -585,12 +759,12 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     }
 
     /// <summary>The model on screen: the base, or the borrowed mesh with its own materials.</summary>
-    private VanillaModel? ShownModel => CompareToBase ? _base?.Model : (_meshSource?.Model ?? _base?.Model);
+    private VanillaModel? ShownModel => CompareToBase ? _base?.Model : (_fileModel ?? _meshSource?.Model ?? _base?.Model);
 
     private void BuildMaterialEditors()
     {
         Materials.Clear();
-        var model = _meshSource?.Model ?? _base?.Model;
+        var model = _fileModel ?? _meshSource?.Model ?? _base?.Model;
         var overrides = Recipe.Look.Materials;
 
         var all = new MaterialEditor(this, null, null, null, 0);
@@ -650,6 +824,11 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
 
         var worn = ShowWorn && model.WornParts.Count > 0;
         var parts = (worn ? model.WornParts : model.Parts).ToList();
+        var hidden = HiddenMeshPaths();
+        if (hidden.Count > 0 && ReferenceEquals(model, _base?.Model))
+            parts.RemoveAll(p => hidden.Contains(RendererPath(p.Name)));
+        if (!worn && !CompareToBase && HoldDelta() is { } hold)
+            parts = parts.Select(p => PartRow.Transform(p, ToViewport(hold), ToViewport(hold), p.MaterialSlot)).ToList();
         var scale = ViewScale;
         // Parts, scale and sprites belong to the dropped/placed model, as in game.
         if (!worn && !CompareToBase)
@@ -658,6 +837,12 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
                 parts.Clear();
             for (var i = 0; i < PartRows.Count; i++)
                 parts.AddRange(PartRows[i].ViewParts(i));
+            // A stone block about 1 m beside the item, for scale. Drawn with the base's first material slot.
+            if (IsItem && ShowReference && _referenceParts.Count > 0 && (ShownModel?.Materials.Count ?? 0) > 0)
+            {
+                var beside = ToViewport(Matrix4x4.CreateTranslation(1.2f, 0, 0));
+                parts.AddRange(_referenceParts.Select(p => PartRow.Transform(p, beside, beside, 0)));
+            }
             if (scale != Vector3.One)
                 parts = parts.Select(p => PartRow.Transform(p, Matrix4x4.CreateScale(scale), Matrix4x4.Identity, p.MaterialSlot)).ToList();
             // Items scale their visual (attach) only; their sprites sit on the root and keep their size.
@@ -793,6 +978,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
 
     partial void OnMeshFromChanged(string value)
     {
+        if (value.Length > 0 && ModelFile.Length > 0)
+            ModelFile = "";
         OnPropertyChanged(nameof(MeshLabel));
         OnPropertyChanged(nameof(HasMeshSwap));
         _ = MeshFromChangedAsync();
@@ -863,13 +1050,18 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         Recipe.Name = string.IsNullOrWhiteSpace(Name) ? null : Name.Trim();
         Recipe.Description = string.IsNullOrWhiteSpace(Description) ? null : Description.Trim();
 
-        Recipe.Look.Mesh = MeshFrom.Length > 0 ? new MeshSource { Prefab = MeshFrom } : null;
+        Recipe.Look.Mesh = ModelFile.Length > 0 ? new MeshSource { File = ModelFile }
+            : MeshFrom.Length > 0 ? new MeshSource { Prefab = MeshFrom } : null;
         Recipe.Look.Icon = IconFile.Length > 0 ? IconFile : null;
         Recipe.Look.Materials = Materials.Where(m => m.Part == null).Select(m => m.ToOverride()).Where(o => o != null).Select(o => o!).ToList();
         Recipe.Look.Parts = PartRows.Select(r => r.ToRecipe()).ToList();
         Recipe.Look.Scale = _modelScaleVector ?? new Vec3((float)Math.Round(Math.Max(ModelScale, 0.001), 4), (float)Math.Round(Math.Max(ModelScale, 0.001), 4), (float)Math.Round(Math.Max(ModelScale, 0.001), 4));
         Recipe.Look.Sprites = Sprites.Select(s => s.ToRecipe()).ToList();
         Recipe.Look.HideMesh = HideMesh;
+        Recipe.Look.HoldPosition = new Vec3(HoldX, HoldY, HoldZ);
+        Recipe.Look.HoldRotation = new Vec3(HoldRotX, HoldRotY, HoldRotZ);
+        Recipe.Look.HoldScale = IsItem ? new Vec3(HoldScale, HoldScale, HoldScale) : new Vec3(1, 1, 1);
+        Recipe.Look.HideMeshes = MeshRows.Where(r => r.IsHidden).Select(r => r.Path).ToList();
 
         Recipe.Fields = Components.Collect();
         Recipe.RemoveComponents = Components.RemovedNames.ToList();
@@ -991,7 +1183,20 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     [RelayCommand]
     private void ClearMesh() => MeshFrom = "";
 
-    public string MeshLabel => MeshFrom.Length == 0 ? $"{Recipe.Base} (base)" : MeshFrom;
+    [RelayCommand]
+    private async Task ChooseModelFile()
+    {
+        var file = await Dialogs.PickFileAsync("Choose a 3D model (glTF binary, .glb)", "3D models", "*.glb");
+        if (file == null || Pack == null)
+            return;
+        // Copied into the pack, so the pack carries its own model like its textures.
+        ModelFile = Pack.AddFile(file, "models");
+    }
+
+    [RelayCommand]
+    private void ClearModelFile() => ModelFile = "";
+
+    public string MeshLabel => ModelFile.Length > 0 ? ModelFile : MeshFrom.Length == 0 ? $"{Recipe.Base} (base)" : MeshFrom;
     public bool HasMeshSwap => MeshFrom.Length > 0;
 
     [RelayCommand]

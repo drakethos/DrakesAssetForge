@@ -8,6 +8,8 @@ internal static class GameNames
 {
     /// <summary>Child objects Forge adds to a prefab. Restore and instance sync find them by these names.</summary>
     public const string VisualChild = "forge_visual";
+    /// <summary>Valheim's held-item child on an ItemDrop prefab: where the item sits in the hand.</summary>
+    public const string AttachChild = "attach";
     public const string GlowChild = "forge_glow";
     public const string SpritesChild = "forge_sprites";
     public const string PartsChild = "forge_parts";

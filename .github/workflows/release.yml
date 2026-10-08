@@ -70,8 +70,10 @@ jobs:
         run: |
           dotnet publish Forge/App/Forge.App.csproj -c Release -r win-x64 --self-contained `
             -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:DebugType=None -p:DebugSymbols=false -o dist/app
-          Get-ChildItem dist/app -Recurse -Filter *.pdb | Remove-Item
+            -p:DebugType=portable -o dist/app
+          # Hexium requires the exe's PDB next to it ("native or mixed-mode binary requires .pdb"); drop the rest.
+          Get-ChildItem dist/app -Recurse -Filter *.pdb | Where-Object { $_.Name -ne 'DrakesAssetForge.pdb' } | Remove-Item
+          if (-not (Test-Path dist/app/DrakesAssetForge.pdb)) { Write-Error "DrakesAssetForge.pdb missing (Hexium needs it)"; exit 1 }
           if (-not (Test-Path dist/app/runtime/DrakesForgeRuntime.dll)) { Write-Error "Forge Runtime wasn't bundled"; exit 1 }
           if (-not (Test-Path dist/app/DrakesAssetForge.exe)) { Write-Error "DrakesAssetForge.exe missing from publish output"; exit 1 }
           Copy-Item README.md, LICENSE, CHANGELOG.md dist/app/
@@ -88,6 +90,9 @@ jobs:
         id: hexium
         run: |
           $version = "${{ steps.ver.outputs.version }}"
+          # Depend on the Forge Runtime version in this commit (the app can release on its own).
+          $runtimeVersion = [regex]::Match((Get-Content Forge/Runtime/Forge.Runtime.csproj -Raw), '<Version>([^<]+)</Version>').Groups[1].Value
+          if (-not $runtimeVersion) { Write-Error "Couldn't read the Forge Runtime version"; exit 1 }
           $description = "Desktop app (exe) to make Valheim items, pieces and reskins without Unity. Install via Gale/Hexium, run DrakesAssetForge.exe from the profile plugins folder."
           if ($description.Length -gt 256) { Write-Error "description too long"; exit 1 }
           New-Item -ItemType Directory -Force pkg-app | Out-Null
@@ -95,13 +100,14 @@ jobs:
           Copy-Item Forge/App/thunderstore/icon.png, Forge/App/thunderstore/README.md, CHANGELOG.md pkg-app/ -Force
           if (-not (Test-Path pkg-app/DrakesAssetForge.exe)) { Write-Error "Hexium package missing DrakesAssetForge.exe"; exit 1 }
           if (-not (Test-Path pkg-app/icon.png)) { Write-Error "Hexium package missing icon.png"; exit 1 }
+          if (-not (Test-Path pkg-app/DrakesAssetForge.pdb)) { Write-Error "Hexium package missing DrakesAssetForge.pdb"; exit 1 }
           [ordered]@{
             name = "DrakesAssetForge"
             version_number = $version
             website_url = "https://github.com/${{ github.repository }}"
             description = $description
             dependencies = @(
-              "DrakeMods-DrakesForgeRuntime-$version",
+              "DrakeMods-DrakesForgeRuntime-$runtimeVersion",
               "ValheimModding-Jotunn-$env:JOTUNN_VERSION"
             )
           } | ConvertTo-Json | Set-Content pkg-app/manifest.json -Encoding utf8NoBOM

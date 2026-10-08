@@ -5,6 +5,10 @@ Two things release from this repo, each with its own version and tag:
 - **Drakes Asset Forge** (the desktop app): tags `app-v*`
 - **Drakes Forge Runtime** (the BepInEx mod packs need): tags `runtime-v*`, changelog in [Forge/Runtime/thunderstore/CHANGELOG.md](Forge/Runtime/thunderstore/CHANGELOG.md)
 
+## App 0.3.1
+
+- Hexium package fix: it now ships `DrakesAssetForge.pdb` next to the exe (Hexium rejects native binaries without one), and depends on the Forge Runtime version actually released (0.3.0). No app changes since 0.3.0.
+
 ## App 0.3.0
 
 Data packs made with 0.3.0 need **Forge Runtime 0.3.0** (their manifest says so).

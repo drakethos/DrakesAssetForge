@@ -145,7 +145,7 @@ One workflow, two release trains, picked by tag (version must match the project 
 
 | Tag | Builds | Publishes |
 |---|---|---|
-| `app-v0.3.0` | Portable win-x64 zip **and** Hexium/Gale package (`DrakesAssetForge.exe` + icon + manifest, Tools/Modpack) | GitHub Release (draft); Hexium when `PUBLISH_HEXIUM=true` |
+| `app-v0.3.1` | Portable win-x64 zip **and** Hexium/Gale package (`DrakesAssetForge.exe` + icon + manifest, Tools/Modpack) | GitHub Release (draft); Hexium when `PUBLISH_HEXIUM=true` |
 | `runtime-v0.3.0` | `Forge/Runtime` Thunderstore package | GitHub Release (draft); Thunderstore and Hexium only when enabled |
 
 GitHub releases are created as **drafts**: check the notes and files on the Releases page, then press *Publish release*.

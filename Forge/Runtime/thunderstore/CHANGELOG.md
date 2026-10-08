@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Fix: costs naming a missing item no longer leave an empty requirement (which crashed removing the piece): a pack item's display name is mapped to its id, anything unknown is left out with a warning, and empty entries are stripped after registration.
 - `look.parts` (kitbashing): other vanilla prefabs' meshes placed on the model, each with position, rotation, scale, an optional mesh-name filter and its own material overrides. On items they sit under `attach`, so they show held and dropped.

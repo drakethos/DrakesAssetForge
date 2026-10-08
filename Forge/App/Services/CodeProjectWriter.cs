@@ -385,7 +385,7 @@ public static class CodeProjectWriter
 public static class ThunderstoreFiles
 {
     // Packs can use sprites, effects and component changes, which need Forge Runtime 0.2.
-    public const string ForgeRuntimeDependency = "DrakeMods-DrakesForgeRuntime-0.2.1";
+    public const string ForgeRuntimeDependency = "DrakeMods-DrakesForgeRuntime-0.3.0";
     public const string JotunnDependency = "ValheimModding-Jotunn-2.30.2";
     public static readonly string[] DataPackDependencies = { ForgeRuntimeDependency, JotunnDependency };
     public static readonly string[] CodeModDependencies = { JotunnDependency };

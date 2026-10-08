@@ -8,6 +8,18 @@ install when the game loads, so a pack is a few small text files plus whatever P
 
 ![Browse Valheim](docs/screenshots/1-browse.png)
 
+## New in 0.3
+
+- **Kitbashing**: put other Valheim prefabs' meshes on your item or piece (a skull on a key, a lantern on a pole), each
+  with its own position, rotation, scale and materials; drag them in the viewport. **Model scale** resizes the whole model.
+- **Duplicate, copy and paste** items in the pack list (also across packs, images included); Remove works again.
+- **Command line**: `inspect`, `validate`, `render`, `new-pack`, `export-code`, so packs can be made and checked without the UI.
+- **Plain C# export options**: images inside the DLL, DrakeModsLibs helpers, looks only.
+- **Fix**: a build cost naming an item by display name or wrong case ("Piece of Paper", "wood") crashed removing the
+  piece in game. Forge Runtime 0.3.0 resolves or leaves out such costs; the app warns and saves the right id.
+
+Packs using these need **Forge Runtime 0.3.0**. Full list in [CHANGELOG.md](CHANGELOG.md).
+
 ## New in 0.2
 
 - **Sprites**: flat pictures on any item or piece (banners, signs, posters, a note on the floor), or as its whole look.
@@ -17,7 +29,7 @@ install when the game loads, so a pack is a few small text files plus whatever P
 - **Remove and add components**: a ward without warding, a piece with a Rigidbody, any Valheim script with its defaults.
 - **Plain C# export**: your items as readable Jotunn code, no Forge needed.
 
-Full list in [CHANGELOG.md](CHANGELOG.md). Packs using these need **Forge Runtime 0.2.1**.
+Packs using these need Forge Runtime 0.2 or later.
 
 ## What you can do
 
@@ -133,8 +145,8 @@ One workflow, two release trains, picked by tag (version must match the project 
 
 | Tag | Builds | Publishes |
 |---|---|---|
-| `app-v0.2.1` | Portable win-x64 zip **and** Hexium/Gale package (`DrakesAssetForge.exe` + icon + manifest, Tools/Modpack) | GitHub Release (draft); Hexium when `PUBLISH_HEXIUM=true` |
-| `runtime-v0.2.1` | `Forge/Runtime` Thunderstore package | GitHub Release (draft); Thunderstore and Hexium only when enabled |
+| `app-v0.3.0` | Portable win-x64 zip **and** Hexium/Gale package (`DrakesAssetForge.exe` + icon + manifest, Tools/Modpack) | GitHub Release (draft); Hexium when `PUBLISH_HEXIUM=true` |
+| `runtime-v0.3.0` | `Forge/Runtime` Thunderstore package | GitHub Release (draft); Thunderstore and Hexium only when enabled |
 
 GitHub releases are created as **drafts**: check the notes and files on the Releases page, then press *Publish release*.
 

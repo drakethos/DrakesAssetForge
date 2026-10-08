@@ -5,7 +5,9 @@ Two things release from this repo, each with its own version and tag:
 - **Drakes Asset Forge** (the desktop app): tags `app-v*`
 - **Drakes Forge Runtime** (the BepInEx mod packs need): tags `runtime-v*`, changelog in [Forge/Runtime/thunderstore/CHANGELOG.md](Forge/Runtime/thunderstore/CHANGELOG.md)
 
-## App: unreleased
+## App 0.3.0
+
+Data packs made with 0.3.0 need **Forge Runtime 0.3.0** (their manifest says so).
 
 - Fix: a build/craft cost naming an item by display name ("Piece of Paper"), wrong case ("wood") or a typo crashed the game when the piece was removed (empty refund in `Piece.DropResources`). Cost rows now warn as you type and save the item id; the Publish check and `validate` say what to write; the plain C# export writes the id or leaves the cost out with a TODO. The pack's own items are suggested in the cost autocomplete.
 - Fix: **Remove** in the pack list did nothing: the open editor saved the item straight back. Removing now discards the open editor first, and a removed item can never be re-saved. Right-click selects the row under the cursor, so the menu acts on that item.

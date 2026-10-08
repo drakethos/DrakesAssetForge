@@ -1,0 +1,68 @@
+name: Publish Hexium Tools zip
+
+# One-shot / redeploy helper: upload an already-built DrakeMods-DrakesAssetForgeTool-*.zip
+# from a GitHub Release (draft OK) to Hexium without retagging or rebuilding Runtime.
+# Requires secret HEXIUM_TOKEN. Uses PUBLISH_HEXIUM / PUBLISH_HEXIUM_APP when set, or force=true.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "GitHub release tag that holds the Tools zip (e.g. app-v0.4.0)"
+        required: true
+        type: string
+      zip_name:
+        description: "Exact asset filename on that release"
+        required: true
+        default: "DrakeMods-DrakesAssetForgeTool-0.4.0.zip"
+        type: string
+      force:
+        description: "Publish even if PUBLISH_HEXIUM / PUBLISH_HEXIUM_APP are not true"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard publish flags
+        if: ${{ inputs.force != true && vars.PUBLISH_HEXIUM != 'true' && vars.PUBLISH_HEXIUM_APP != 'true' }}
+        run: |
+          echo "::error::Set repository variable PUBLISH_HEXIUM or PUBLISH_HEXIUM_APP to true, or pass force=true."
+          exit 1
+
+      - name: Download Tools zip from release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "${{ inputs.release_tag }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "${{ inputs.zip_name }}" \
+            --dir dist \
+            --clobber
+          test -f "dist/${{ inputs.zip_name }}"
+          ls -la "dist/${{ inputs.zip_name }}"
+
+      - name: Publish Tools package to Hexium
+        env:
+          HEXIUM_TOKEN: ${{ secrets.HEXIUM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HEXIUM_TOKEN}" ]; then
+            echo "::error::HEXIUM_TOKEN secret is not set" >&2
+            exit 1
+          fi
+          python3 .github/scripts/publish-hexium.py \
+            --file "dist/${{ inputs.zip_name }}" \
+            --repository "https://valheim.hexium.gg" \
+            --namespace "DrakeMods" \
+            --communities "valheim" \
+            --categories "Tools,Valheim 1.0,Open Source"

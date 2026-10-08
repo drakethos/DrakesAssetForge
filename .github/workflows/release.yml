@@ -1,13 +1,15 @@
 name: Release
 
 # One repo, two release trains, picked by tag:
-#   app-v1.2.3      → Drakes Asset Forge (desktop app): portable win-x64 zip + Hexium/Gale
-#                     Thunderstore-format zip (exe + icon + manifest, Tools/Modpack) → GitHub Release;
-#                     Hexium upload when PUBLISH_HEXIUM is 'true'.
+#   app-v1.2.3      → Drakes Asset Forge (desktop TOOL): portable win-x64 zip + Hexium/Gale
+#                     Thunderstore-format zip (exe + icon + README/screenshots + manifest, Tools) →
+#                     GitHub Release; Hexium upload when PUBLISH_HEXIUM or PUBLISH_HEXIUM_APP is 'true'.
 #   runtime-v1.2.3  → Drakes Forge Runtime (BepInEx mod) Thunderstore zip → GitHub Release,
-#                     then Thunderstore / Hexium only when PUBLISH_THUNDERSTORE / PUBLISH_HEXIUM are 'true'.
+#                     then Thunderstore when PUBLISH_THUNDERSTORE is 'true',
+#                     Hexium only when PUBLISH_HEXIUM_RUNTIME is 'true' (occasional — not tied to app tags).
 # GitHub releases are created as drafts: review them on the Releases page, then press "Publish release".
 # The tag's version must equal <Version> in the project file.
+# App Tools packages pin FORGE_RUNTIME_DEP_VERSION (do not bump Runtime just to ship a Tools zip).
 
 on:
   push:
@@ -22,6 +24,8 @@ env:
   PFHOENIX_VERSION: "1.0.23"
   JOTUNN_VERSION: "2.30.2"
   BEPINEXPACK: "denikson-BepInExPack_Valheim-5.4.2351"
+  # Published Runtime the Tools/app package depends on. Bump only when Runtime itself changes.
+  FORGE_RUNTIME_DEP_VERSION: "0.4.0"
 
 jobs:
   test:
@@ -68,14 +72,18 @@ jobs:
 
       - name: Publish app
         run: |
+          # Portable PDB required next to the single-file native host: Hexium/Gale rejects
+          # DrakesAssetForge.exe without DrakesAssetForge.pdb ("Native or mixed-mode binary … requires …pdb").
           dotnet publish Forge/App/Forge.App.csproj -c Release -r win-x64 --self-contained `
             -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:DebugType=portable -o dist/app
-          # Hexium requires the exe's PDB next to it ("native or mixed-mode binary requires .pdb"); drop the rest.
-          Get-ChildItem dist/app -Recurse -Filter *.pdb | Where-Object { $_.Name -ne 'DrakesAssetForge.pdb' } | Remove-Item
-          if (-not (Test-Path dist/app/DrakesAssetForge.pdb)) { Write-Error "DrakesAssetForge.pdb missing (Hexium needs it)"; exit 1 }
+            -p:DebugType=portable -p:DebugSymbols=true -o dist/app
+          # Keep only the exe sidecar PDB; drop huge native/lib PDBs (Skia/HarfBuzz) and satellite PDBs.
+          Get-ChildItem dist/app -Recurse -Filter *.pdb |
+            Where-Object { $_.Name -ne 'DrakesAssetForge.pdb' } |
+            Remove-Item -Force
           if (-not (Test-Path dist/app/runtime/DrakesForgeRuntime.dll)) { Write-Error "Forge Runtime wasn't bundled"; exit 1 }
           if (-not (Test-Path dist/app/DrakesAssetForge.exe)) { Write-Error "DrakesAssetForge.exe missing from publish output"; exit 1 }
+          if (-not (Test-Path dist/app/DrakesAssetForge.pdb)) { Write-Error "DrakesAssetForge.pdb missing (required next to exe)"; exit 1 }
           Copy-Item README.md, LICENSE, CHANGELOG.md dist/app/
 
       - name: Zip portable
@@ -85,34 +93,35 @@ jobs:
           python -c "import shutil; shutil.make_archive('$name', 'zip', 'dist/app')"
           "zip=$name.zip" >> $env:GITHUB_OUTPUT
 
-      # Thunderstore/Hexium-compatible package: runnable exe + 256x256 icon + manifest (Tools / Modpack).
-      - name: Hexium / Gale package
+      # Thunderstore/Hexium Tools package: distinct from Runtime (DrakesAssetForgeTool + TOOL/.EXE icon).
+      - name: Hexium / Gale Tools package
         id: hexium
         run: |
           $version = "${{ steps.ver.outputs.version }}"
-          # Depend on the Forge Runtime version in this commit (the app can release on its own).
-          $runtimeVersion = [regex]::Match((Get-Content Forge/Runtime/Forge.Runtime.csproj -Raw), '<Version>([^<]+)</Version>').Groups[1].Value
-          if (-not $runtimeVersion) { Write-Error "Couldn't read the Forge Runtime version"; exit 1 }
-          $description = "Desktop app (exe) to make Valheim items, pieces and reskins without Unity. Install via Gale/Hexium, run DrakesAssetForge.exe from the profile plugins folder."
-          if ($description.Length -gt 256) { Write-Error "description too long"; exit 1 }
+          $runtimeDep = $env:FORGE_RUNTIME_DEP_VERSION
+          $description = "Desktop TOOL (.exe) - Drakes Asset Forge authoring app. Not Forge Runtime. Run DrakesAssetForge.exe to create items/pieces/reskins; publish content packs separately."
+          if ($description.Length -gt 256) { Write-Error "description too long ($($description.Length))"; exit 1 }
           New-Item -ItemType Directory -Force pkg-app | Out-Null
           Copy-Item -Path dist/app/* -Destination pkg-app -Recurse -Force
           Copy-Item Forge/App/thunderstore/icon.png, Forge/App/thunderstore/README.md, CHANGELOG.md pkg-app/ -Force
+          New-Item -ItemType Directory -Force pkg-app/screenshots | Out-Null
+          Copy-Item Forge/App/thunderstore/screenshots/* pkg-app/screenshots/ -Force
           if (-not (Test-Path pkg-app/DrakesAssetForge.exe)) { Write-Error "Hexium package missing DrakesAssetForge.exe"; exit 1 }
-          if (-not (Test-Path pkg-app/icon.png)) { Write-Error "Hexium package missing icon.png"; exit 1 }
           if (-not (Test-Path pkg-app/DrakesAssetForge.pdb)) { Write-Error "Hexium package missing DrakesAssetForge.pdb"; exit 1 }
+          if (-not (Test-Path pkg-app/icon.png)) { Write-Error "Hexium package missing icon.png"; exit 1 }
+          if (-not (Test-Path pkg-app/screenshots/1-browse.png)) { Write-Error "Hexium package missing screenshots"; exit 1 }
           [ordered]@{
-            name = "DrakesAssetForge"
+            name = "DrakesAssetForgeTool"
             version_number = $version
             website_url = "https://github.com/${{ github.repository }}"
             description = $description
             dependencies = @(
-              "DrakeMods-DrakesForgeRuntime-$runtimeVersion",
+              "DrakeMods-DrakesForgeRuntime-$runtimeDep",
               "ValheimModding-Jotunn-$env:JOTUNN_VERSION"
             )
           } | ConvertTo-Json | Set-Content pkg-app/manifest.json -Encoding utf8NoBOM
-          $zip = "DrakeMods-DrakesAssetForge-$version.zip"
-          python -c "import shutil; shutil.make_archive('DrakeMods-DrakesAssetForge-$version', 'zip', 'pkg-app')"
+          $zip = "DrakeMods-DrakesAssetForgeTool-$version.zip"
+          python -c "import shutil; shutil.make_archive('DrakeMods-DrakesAssetForgeTool-$version', 'zip', 'pkg-app')"
           "zip=$zip" >> $env:GITHUB_OUTPUT
 
       - name: GitHub Release
@@ -128,16 +137,17 @@ jobs:
           body: |
             ## Drakes Asset Forge ${{ steps.ver.outputs.version }}
 
-            Make Valheim items, build pieces and reskins without Unity. Windows, no .NET install needed.
+            Desktop **TOOL** (`.exe`) to make Valheim items, build pieces and reskins without Unity. Windows, no .NET install needed.
+            Content packs / mods you create are separate packages; this zip is the authoring app itself — **not** Forge Runtime.
 
             ### Portable
-            **Download** `${{ steps.zip.outputs.zip }}`, unzip anywhere, run `DrakesAssetForge.exe`.
+            **Download** `${{ steps.zip.outputs.zip }}`, unzip anywhere, run `DrakesAssetForge.exe` (keep `DrakesAssetForge.pdb` beside it).
 
-            ### Hexium / Gale (exe + icon + modpack package)
-            Import **`${{ steps.hexium.outputs.zip }}`** (or install from Hexium when published).
-            Gale places it under `BepInEx/plugins/DrakeMods-DrakesAssetForge/` — run `DrakesAssetForge.exe` from there.
-            The package depends on **Forge Runtime** + Jotunn so the profile is ready for push/test.
-            Categories: **Tools**, **Modpack**, **Valheim 1.0**.
+            ### Hexium / Gale (Tools package)
+            Import **`${{ steps.hexium.outputs.zip }}`** (package identity `DrakeMods-DrakesAssetForgeTool`, distinct from `DrakeMods-DrakesForgeRuntime`).
+            Gale places it under `BepInEx/plugins/DrakeMods-DrakesAssetForgeTool/` — run `DrakesAssetForge.exe` from there.
+            Depends on published **Forge Runtime** `${{ env.FORGE_RUNTIME_DEP_VERSION }}` + Jotunn (Runtime is not re-released with every Tools update).
+            Categories: **Tools**, **Valheim 1.0**, **Open Source**.
 
             See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md).
 
@@ -152,7 +162,7 @@ jobs:
     if: |
       always()
       && needs.app.result == 'success'
-      && vars.PUBLISH_HEXIUM == 'true'
+      && (vars.PUBLISH_HEXIUM == 'true' || vars.PUBLISH_HEXIUM_APP == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -160,7 +170,7 @@ jobs:
         with:
           name: app-hexium-zip
           path: dist
-      - name: Publish app package to Hexium
+      - name: Publish Tools package to Hexium
         env:
           HEXIUM_TOKEN: ${{ secrets.HEXIUM_TOKEN }}
           ZIP_NAME: ${{ needs.app.outputs.hexium_zip }}
@@ -175,7 +185,7 @@ jobs:
             --repository "https://valheim.hexium.gg" \
             --namespace "DrakeMods" \
             --communities "valheim" \
-            --categories "Tools,Modpack,Valheim 1.0,Open Source"
+            --categories "Tools,Valheim 1.0,Open Source"
 
   # ── Forge Runtime (BepInEx mod) ──────────────────────────────────────────────
   runtime:
@@ -281,55 +291,30 @@ jobs:
           categories: |
             libraries
 
-  publish-hexium:
+  # Runtime Hexium uploads are intentional/occasional — require PUBLISH_HEXIUM_RUNTIME (not the shared app flag).
+  publish-hexium-runtime:
     needs: runtime
-    if: vars.PUBLISH_HEXIUM == 'true'
+    if: vars.PUBLISH_HEXIUM_RUNTIME == 'true'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: runtime-zip
           path: dist
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-      - name: Install tcli
-        run: dotnet tool install -g tcli
-      - name: Publish to Hexium
+      - name: Publish Runtime to Hexium
         env:
-          VERSION: ${{ needs.runtime.outputs.version }}
-          DESCRIPTION: ${{ needs.runtime.outputs.description }}
-          ZIP_NAME: ${{ needs.runtime.outputs.zip }}
           HEXIUM_TOKEN: ${{ secrets.HEXIUM_TOKEN }}
-          WEBSITE_URL: https://github.com/${{ github.repository }}
+          ZIP_NAME: ${{ needs.runtime.outputs.zip }}
         run: |
           set -euo pipefail
           if [ -z "${HEXIUM_TOKEN}" ]; then
             echo "::error::HEXIUM_TOKEN secret is not set" >&2
             exit 1
           fi
-          DESC_ESC=$(printf '%s' "$DESCRIPTION" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read())[1:-1])')
-          # Check Hexium's category names before enabling PUBLISH_HEXIUM.
-          cat > thunderstore.toml <<EOF
-          [config]
-          schemaVersion = "0.0.1"
-
-          [package]
-          namespace = "DrakeMods"
-          name = "DrakesForgeRuntime"
-          versionNumber = "${VERSION}"
-          description = "${DESC_ESC}"
-          websiteUrl = "${WEBSITE_URL}"
-          containsNsfwContent = false
-
-          [publish]
-          repository = "https://valheim.hexium.gg"
-          communities = ["valheim"]
-
-          [publish.categories]
-          valheim = ["Libraries", "Valheim 1.0"]
-          EOF
-          sed -i 's/^          //' thunderstore.toml
-          cat thunderstore.toml
-          export PATH="$PATH:$HOME/.dotnet/tools"
-          tcli publish --config-path thunderstore.toml --file "dist/${ZIP_NAME}" --token "${HEXIUM_TOKEN}"
+          python3 .github/scripts/publish-hexium.py \
+            --file "dist/${ZIP_NAME}" \
+            --repository "https://valheim.hexium.gg" \
+            --namespace "DrakeMods" \
+            --communities "valheim" \
+            --categories "Libraries,Valheim 1.0"

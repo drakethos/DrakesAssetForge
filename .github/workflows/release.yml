@@ -101,13 +101,17 @@ jobs:
           $runtimeDep = $env:FORGE_RUNTIME_DEP_VERSION
           $description = "Desktop TOOL (.exe) - Drakes Asset Forge authoring app. Not Forge Runtime. Run DrakesAssetForge.exe to create items/pieces/reskins; publish content packs separately."
           if ($description.Length -gt 256) { Write-Error "description too long ($($description.Length))"; exit 1 }
-          New-Item -ItemType Directory -Force pkg-app | Out-Null
-          Copy-Item -Path dist/app/* -Destination pkg-app -Recurse -Force
+          # Gale (and r2modman) only keep folder structure for files under plugins/ (or patchers/, monomod/, core/,
+          # config/); anything else is flattened to loose files. The app finds runtime/DrakesForgeRuntime.dll and forge-src/
+          # next to the exe (AppContext.BaseDirectory), so the whole publish output lives under plugins/. Only manifest.json,
+          # icon.png, README.md, CHANGELOG.md (and the README's screenshots/, docs only) sit at the zip root.
+          New-Item -ItemType Directory -Force pkg-app/plugins | Out-Null
+          Copy-Item -Path dist/app/* -Destination pkg-app/plugins -Recurse -Force
           Copy-Item Forge/App/thunderstore/icon.png, Forge/App/thunderstore/README.md, CHANGELOG.md pkg-app/ -Force
           New-Item -ItemType Directory -Force pkg-app/screenshots | Out-Null
           Copy-Item Forge/App/thunderstore/screenshots/* pkg-app/screenshots/ -Force
-          if (-not (Test-Path pkg-app/DrakesAssetForge.exe)) { Write-Error "Hexium package missing DrakesAssetForge.exe"; exit 1 }
-          if (-not (Test-Path pkg-app/DrakesAssetForge.pdb)) { Write-Error "Hexium package missing DrakesAssetForge.pdb"; exit 1 }
+          if (-not (Test-Path pkg-app/plugins/DrakesAssetForge.exe)) { Write-Error "Hexium package missing DrakesAssetForge.exe"; exit 1 }
+          if (-not (Test-Path pkg-app/plugins/DrakesAssetForge.pdb)) { Write-Error "Hexium package missing DrakesAssetForge.pdb"; exit 1 }
           if (-not (Test-Path pkg-app/icon.png)) { Write-Error "Hexium package missing icon.png"; exit 1 }
           if (-not (Test-Path pkg-app/screenshots/1-browse.png)) { Write-Error "Hexium package missing screenshots"; exit 1 }
           [ordered]@{
@@ -122,6 +126,9 @@ jobs:
           } | ConvertTo-Json | Set-Content pkg-app/manifest.json -Encoding utf8NoBOM
           $zip = "DrakeMods-DrakesAssetForgeTool-$version.zip"
           python -c "import shutil; shutil.make_archive('DrakeMods-DrakesAssetForgeTool-$version', 'zip', 'pkg-app')"
+          # Guard: simulate Gale's install rules (nothing flattened; the runtime DLL and forge-src the app reads land beside the exe).
+          python .github/scripts/check-gale-layout.py $zip DrakeMods-DrakesAssetForgeTool --expect DrakesAssetForge.exe --expect DrakesAssetForge.pdb --expect runtime/DrakesForgeRuntime.dll --expect forge-src/Runtime/ForgeHost.cs --expect forge-src/Format/PackReader.cs --allow-root-dir screenshots
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           "zip=$zip" >> $env:GITHUB_OUTPUT
 
       - name: GitHub Release
@@ -228,7 +235,9 @@ jobs:
           $version = "${{ steps.ver.outputs.version }}"
           $description = "Loads Forge packs: Valheim items, pieces and reskins made with Drakes Asset Forge, built from your own game files. No asset bundles."
           New-Item -ItemType Directory -Force pkg | Out-Null
-          Copy-Item Forge/Runtime/bin/Release/DrakesForgeRuntime.dll pkg/
+          # DLL under plugins/ (Gale/r2modman flatten anything outside plugins/, patchers/, monomod/, core/, config/).
+          New-Item -ItemType Directory -Force pkg/plugins | Out-Null
+          Copy-Item Forge/Runtime/bin/Release/DrakesForgeRuntime.dll pkg/plugins/
           Copy-Item Forge/Runtime/thunderstore/README.md, Forge/Runtime/thunderstore/CHANGELOG.md, Forge/Runtime/thunderstore/icon.png pkg/
           [ordered]@{
             name = "DrakesForgeRuntime"
@@ -239,6 +248,8 @@ jobs:
           } | ConvertTo-Json | Set-Content pkg/manifest.json -Encoding utf8NoBOM
           $zip = "DrakeMods-DrakesForgeRuntime-$version.zip"
           python -c "import shutil; shutil.make_archive('DrakeMods-DrakesForgeRuntime-$version', 'zip', 'pkg')"
+          python .github/scripts/check-gale-layout.py $zip DrakeMods-DrakesForgeRuntime --expect DrakesForgeRuntime.dll
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           "zip=$zip" >> $env:GITHUB_OUTPUT
           "description=$description" >> $env:GITHUB_OUTPUT
 

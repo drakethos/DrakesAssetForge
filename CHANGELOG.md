@@ -5,6 +5,14 @@ Two things release from this repo, each with its own version and tag:
 - **Drakes Asset Forge** (the desktop app): tags `app-v*`
 - **Drakes Forge Runtime** (the BepInEx mod packs need): tags `runtime-v*`, changelog in [Forge/Runtime/thunderstore/CHANGELOG.md](Forge/Runtime/thunderstore/CHANGELOG.md)
 
+## Unreleased
+
+### Fixed
+
+- Packaging only: the Hexium/Thunderstore zip now puts the app (exe, `runtime/` with the Forge Runtime DLL it installs, `forge-src/` for code export) and the Forge Runtime DLL under `plugins/`, so Gale and r2modman
+  keep the folder structure (they flatten anything outside `plugins/`). A CI guard (`check-gale-layout.py`) fails the build
+  if that ever regresses. No code or behaviour change for players.
+
 ## App 0.4.0
 
 - **Hold pose** (items): Look tab section to move, turn and scale how the item sits in the hand, as offsets on Valheim's own pose. Held and dropped both follow it. A stone block about 1 m beside the item gives the size. Stored as `look.hold`; needs Forge Runtime 0.4.0.

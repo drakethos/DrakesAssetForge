@@ -19,6 +19,8 @@ internal static class Cli
         DrakesAssetForge <command>
           inspect <prefab> [--json]                     scripts, materials, snap points, size, lights of a Valheim prefab
           validate <pack folder>                        recipe problems, missing files, bases not in this Valheim
+          export-glb <prefab> <out.glb> [--worn] [--texture-size px]
+                                                        a Valheim prefab's model as .glb (static meshes, colours, albedo textures)
           render <pack folder> <recipe id> <out.png> [--yaw deg] [--pitch deg] [--size px] [--worn]
                                                         preview image (approximate shading; sprites, hidden mesh, borrowed mesh)
           new-pack <folder> <id> <name> <author>        an empty pack
@@ -38,6 +40,7 @@ internal static class Cli
             {
                 "inspect" when args.Length > 1 => Inspect(args[1], args.Contains("--json")),
                 "validate" when args.Length > 1 => Validate(args[1]),
+                "export-glb" when args.Length > 2 => ExportGlb(args[1], args[2], args.Contains("--worn"), (int)Opt(args, "--texture-size", GlbExport.TextureSize)),
                 "render" when args.Length > 3 => Render(args[1], args[2], args[3], Opt(args, "--yaw", 40), Opt(args, "--pitch", 17), (int)Opt(args, "--size", 512), args.Contains("--worn")),
                 "new-pack" when args.Length > 4 => NewPack(args[1], args[2], args[3], args[4]),
                 "export-code" when args.Length > 2 => ExportCode(args),
@@ -118,6 +121,9 @@ internal static class Cli
             Console.WriteLine($"  snap:      {string.Join("  ", info.SnapPoints.Select(p => "(" + F(p) + ")"))}");
         if (info.Lights.Count + info.Particles.Count > 0)
             Console.WriteLine($"  effects:   {info.Lights.Count} light(s), {info.Particles.Count} particle effect(s)");
+        foreach (var c in info.Colliders)
+            Console.WriteLine($"  collider:  {(c.Path.Length == 0 ? "(root)" : c.Path)}  {c.Shape}{(c.IsTrigger ? " trigger" : "")}{(c.Enabled ? "" : " off")}  " +
+                              $"centre ({F(c.Center)}) {(c.Shape is ColliderShape.Box or ColliderShape.Mesh ? $"size ({F(c.Size)})" : $"radius {c.Radius:0.###}")}  at ({F(c.ToRoot.Translation)})");
         return 0;
     }
 
@@ -163,6 +169,8 @@ internal static class Cli
             if (r.Look.Mesh?.File is { } modelFile && pack.Resolve(modelFile) is { } modelPath && File.Exists(modelPath)
                 && GlbPreview.Load(modelPath, out var modelError) == null)
                 problems.Add($"{r.Id}: model '{modelFile}': {modelError}");
+            if (r.Look.IconPrefab is { } iconFrom && !vanilla.Catalog.ByName.ContainsKey(iconFrom))
+                problems.Add($"{r.Id}: icon prefab '{iconFrom}' isn't in this Valheim install.");
             if (r.Look.Mesh?.Prefab is { } mesh && !vanilla.Catalog.ByName.ContainsKey(mesh))
                 problems.Add($"{r.Id}: mesh prefab '{mesh}' isn't in this Valheim install.");
             foreach (var m in r.Look.Materials.Where(m => m.FromPrefab != null && !vanilla.Catalog.ByName.ContainsKey(m.FromPrefab!)))
@@ -173,6 +181,23 @@ internal static class Cli
         foreach (var p in problems)
             Console.WriteLine("  - " + p);
         return problems.Count == 0 ? 0 : 2;
+    }
+
+    // ---- export-glb ----
+
+    private static int ExportGlb(string prefab, string output, bool worn, int textureSize)
+    {
+        using var vanilla = OpenVanilla();
+        if (!vanilla.Catalog.ByName.TryGetValue(prefab, out var entry))
+            throw new InvalidOperationException($"'{prefab}' isn't in this Valheim install.");
+        var model = vanilla.LoadModelForExportAsync(entry, textureSize).GetAwaiter().GetResult()
+                    ?? throw new InvalidOperationException($"'{prefab}' has no model.");
+        var path = Path.GetFullPath(output);
+        var result = GlbExport.Write(model, path, worn);
+        Console.WriteLine($"Wrote {path}: {result.Parts} part(s), {result.Triangles:N0} triangles, {result.Materials} material(s), {result.Textures} texture(s).");
+        foreach (var problem in result.Problems)
+            Console.WriteLine("  note: " + problem);
+        return 0;
     }
 
     // ---- render ----

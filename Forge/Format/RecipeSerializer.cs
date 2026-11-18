@@ -270,6 +270,8 @@ public static class RecipeSerializer
 
         if (recipe.Look.Scale.X <= 0 || recipe.Look.Scale.Y <= 0 || recipe.Look.Scale.Z <= 0)
             problems.Add("look.scale must be above 0.");
+        if (recipe.Look.Collision is { Mode: CollisionMode.Box, Size: var size } && (size.X <= 0 || size.Y <= 0 || size.Z <= 0))
+            problems.Add("look.collision.size must be above 0.");
 
         foreach (var s in recipe.Look.Sprites)
             if (s.Width <= 0 || s.Height <= 0)
@@ -354,7 +356,7 @@ public static class RecipeSerializer
 
     private static LookRecipe ReadLook(JsonValue look, List<string> problems)
     {
-        var result = new LookRecipe { Icon = Str(look, "icon") };
+        var result = new LookRecipe { Icon = Str(look, "icon"), IconPrefab = Str(look, "iconFrom"), IconTint = Str(look, "iconTint") };
 
         if (look["mesh"] is { IsObject: true } mesh)
             result.Mesh = new MeshSource { Prefab = Str(mesh, "prefab"), File = Str(mesh, "file") };
@@ -371,6 +373,18 @@ public static class RecipeSerializer
             result.HoldPosition = ReadVec(hold["position"], "look.hold.position", problems);
             result.HoldRotation = ReadVec(hold["rotation"], "look.hold.rotation", problems);
             result.HoldScale = ReadScale(hold["scale"], "look.hold.scale", problems);
+        }
+        if (look["collision"] is { IsObject: true } collision)
+        {
+            var mode = Str(collision, "mode") ?? "base";
+            if (!Enum.TryParse<CollisionMode>(mode, true, out var parsed))
+                problems.Add($"look.collision.mode \"{mode}\" must be base, box or mesh.");
+            result.Collision = new CollisionRecipe
+            {
+                Mode = parsed,
+                Center = ReadVec(collision["center"], "look.collision.center", problems),
+                Size = ReadScale(collision["size"], "look.collision.size", problems)
+            };
         }
         if (look["parts"] is { IsArray: true } parts)
         {
@@ -613,6 +627,16 @@ public static class RecipeSerializer
                 hold.Set("scale", WriteScale(look.HoldScale));
             obj.Set("hold", hold);
         }
+        if (look.Collision is { } collision)
+        {
+            var c = JsonValue.NewObject().Set("mode", collision.Mode.ToString().ToLowerInvariant());
+            if (collision.Mode == CollisionMode.Box)
+            {
+                c.Set("center", Vector(collision.Center.X, collision.Center.Y, collision.Center.Z));
+                c.Set("size", Vector(collision.Size.X, collision.Size.Y, collision.Size.Z));
+            }
+            obj.Set("collision", c);
+        }
         if (look.Parts.Count > 0)
         {
             var arr = JsonValue.NewArray();
@@ -652,6 +676,8 @@ public static class RecipeSerializer
         }
 
         SetIf(obj, "icon", look.Icon);
+        SetIf(obj, "iconFrom", look.IconPrefab);
+        SetIf(obj, "iconTint", look.IconTint);
         return obj;
     }
 

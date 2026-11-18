@@ -103,6 +103,10 @@ public sealed class VanillaService : IDisposable
         }
     }
 
+    /// <summary>The model decoded with large textures, for export. Not cached: the preview keeps its small copy.</summary>
+    public Task<VanillaModel?> LoadModelForExportAsync(VanillaEntry entry, int maxTextureSize) =>
+        OnWorker(() => PreviewLoader.Load(_session, entry, true, maxTextureSize).Model);
+
     /// <summary>Every texture slot of a material, decoded (thumbnails at 256, exports at full size).</summary>
     public Task<IReadOnlyDictionary<string, RgbaImage>> LoadTexturesAsync(MaterialInfo material, int maxSize)
     {

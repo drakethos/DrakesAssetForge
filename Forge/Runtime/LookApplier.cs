@@ -126,6 +126,10 @@ internal static class LookApplier
             ApplyArmorMaterial(prefab, body, pack, textures, warnings);
         if (look.Icon != null)
             ApplyIcon(prefab, look.Icon, pack, textures, warnings);
+        else if (look.IconPrefab != null)
+            ApplyIconFrom(prefab, look.IconPrefab, warnings);
+        if (look.IconTint != null)
+            TintIcon(prefab, look.IconTint, warnings);
         // Last, so material overrides and slot numbers only ever see the model's own renderers.
         // hideMesh hides the model's own meshes only: before parts and sprites are added.
         if (look.HideMesh)
@@ -134,6 +138,8 @@ internal static class LookApplier
         HideMeshes(prefab, look.HideMeshes);
         Parts.Apply(prefab, look, pack, textures, warnings);
         HoldPose.Apply(prefab, look);
+        // Before sprites: mesh collision follows the model and its parts, not flat images.
+        Collision.Apply(prefab, look, warnings);
         Sprites.Apply(prefab, look, pack, textures, warnings);
     }
 
@@ -308,6 +314,12 @@ internal static class LookApplier
                 warnings.Add($"shader {material.shader.name} has no texture {t.Key}");
                 continue;
             }
+            // "" is a blank on purpose (Blank in the app): the slot has no texture, whatever the source had.
+            if (t.Value.Length == 0)
+            {
+                material.SetTexture(t.Key, null);
+                continue;
+            }
 
             var tex = textures.Load(pack.Resolve(t.Value), t.Value, warnings, IsNormalMap(t.Key));
             if (tex != null)
@@ -379,6 +391,39 @@ internal static class LookApplier
         }
         else
             warnings.Add($"shader {material.shader.name} has no color {property}");
+    }
+
+    /// <summary>Multiplies a colour over the prefab's icon (look.iconTint). Restored with the other icon fields on reload.</summary>
+    private static void TintIcon(GameObject prefab, string tint, List<string> warnings)
+    {
+        if (!RecipeSerializer.TryParseColor(tint, out var c))
+        {
+            warnings.Add($"look.iconTint '{tint}' is not a colour");
+            return;
+        }
+        var color = new Color(c[0], c[1], c[2], c[3]);
+        if (prefab.GetComponent<ItemDrop>() is { } drop && drop.m_itemData.m_shared.m_icons is { Length: > 0 } icons)
+            drop.m_itemData.m_shared.m_icons = icons.Select(s => IconTint.Apply(s, color)).ToArray();
+        else if (prefab.GetComponent<Piece>() is { } piece && piece.m_icon != null)
+            piece.m_icon = IconTint.Apply(piece.m_icon, color);
+    }
+
+    /// <summary>Borrows another prefab's icon (look.iconFrom): the same sprite Valheim shows for it.</summary>
+    private static void ApplyIconFrom(GameObject prefab, string sourceName, List<string> warnings)
+    {
+        var source = PrefabManager.Instance.GetPrefab(sourceName);
+        if (source == null)
+        {
+            warnings.Add($"look.iconFrom '{sourceName}' not found");
+            return;
+        }
+
+        if (prefab.GetComponent<ItemDrop>() is { } drop && source.GetComponent<ItemDrop>() is { } sourceDrop)
+            drop.m_itemData.m_shared.m_icons = sourceDrop.m_itemData.m_shared.m_icons;
+        else if (prefab.GetComponent<Piece>() is { } piece && source.GetComponent<Piece>() is { } sourcePiece)
+            piece.m_icon = sourcePiece.m_icon;
+        else
+            warnings.Add($"look.iconFrom '{sourceName}': it has no icon to borrow for this kind of prefab");
     }
 
     private static void ApplyIcon(GameObject prefab, string iconPath, LoadedPack pack, TextureCache textures, List<string> warnings)

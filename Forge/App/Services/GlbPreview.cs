@@ -31,7 +31,7 @@ public static class GlbPreview
     {
         var materials = model.Materials.Select((m, i) => new ModelMaterial
         {
-            Info = new MaterialInfo { Name = m.Name ?? $"glb material {i}", Shader = "glb", Color = m.BaseColor },
+            Info = new MaterialInfo { Name = m.Name ?? $"glb material {i}", Shader = "glb", Color = m.BaseColor, Translucent = m.Blend },
             Albedo = Decode(m.BaseColorImage)
         }).ToList();
 
@@ -39,14 +39,20 @@ public static class GlbPreview
         var defaultSlot = materials.Count;
         materials.Add(new ModelMaterial { Info = new MaterialInfo { Name = "glb default", Shader = "glb", Color = new float[] { 1, 1, 1, 1 } } });
 
-        var parts = model.Submeshes.Select((sub, i) => new ModelPart
+        // GlbReader gives Unity space; the viewport (like MeshDecoder.ToPart for vanilla) wants X mirrored and the
+        // winding reversed. Without this, fitted collision boxes and snap points land mirrored in game.
+        var parts = model.Submeshes.Select((sub, i) =>
         {
-            Name = $"glb{i}_{sub.Name ?? "mesh"}",
-            Positions = sub.Positions,
-            Normals = sub.Normals.Length == sub.Positions.Length ? sub.Normals : SmoothNormals(sub.Positions, sub.Indices),
-            Uvs = sub.Uvs.Length == sub.Positions.Length / 3 * 2 ? sub.Uvs : new float[sub.Positions.Length / 3 * 2],
-            Indices = sub.Indices,
-            MaterialSlot = sub.Material >= 0 && sub.Material < model.Materials.Count ? sub.Material : defaultSlot
+            var normals = sub.Normals.Length == sub.Positions.Length ? sub.Normals : SmoothNormals(sub.Positions, sub.Indices);
+            return new ModelPart
+            {
+                Name = $"glb{i}_{sub.Name ?? "mesh"}",
+                Positions = MirrorX(sub.Positions),
+                Normals = MirrorX(normals),
+                Uvs = sub.Uvs.Length == sub.Positions.Length / 3 * 2 ? sub.Uvs : new float[sub.Positions.Length / 3 * 2],
+                Indices = ReverseWinding(sub.Indices),
+                MaterialSlot = sub.Material >= 0 && sub.Material < model.Materials.Count ? sub.Material : defaultSlot
+            };
         }).ToList();
 
         return new VanillaModel
@@ -81,6 +87,22 @@ public static class GlbPreview
             // A texture that won't decode just isn't shown; the model still is.
             return null;
         }
+    }
+
+    private static float[] MirrorX(float[] xyz)
+    {
+        var mirrored = (float[])xyz.Clone();
+        for (var i = 0; i < mirrored.Length; i += 3)
+            mirrored[i] = -mirrored[i];
+        return mirrored;
+    }
+
+    private static int[] ReverseWinding(int[] indices)
+    {
+        var reversed = (int[])indices.Clone();
+        for (var t = 0; t + 2 < reversed.Length; t += 3)
+            (reversed[t + 1], reversed[t + 2]) = (reversed[t + 2], reversed[t + 1]);
+        return reversed;
     }
 
     /// <summary>Per-vertex normals averaged from the faces that use each vertex (for files without normals).</summary>

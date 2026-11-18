@@ -102,8 +102,58 @@ public static class PrefabReader
                 SnapPoints = nodes
                     .Where(n => n.Path.Length > 0 && !n.Path.Contains('/') && (n.Tag == SnapPointTag || n.Path.Contains("snappoint", StringComparison.OrdinalIgnoreCase)))
                     .Select(n => n.ToRoot.Translation)
-                    .ToList()
+                    .ToList(),
+                Colliders = nodes.SelectMany(n => n.Components.Select(c => ReadCollider(n, c))).Where(c => c != null).Select(c => c!).ToList()
             };
+        }
+
+        private ColliderInfo? ReadCollider(Node node, AssetExternal component)
+        {
+            var type = (AssetClassID)component.info.TypeId;
+            if (type is not (AssetClassID.BoxCollider or AssetClassID.SphereCollider or AssetClassID.CapsuleCollider or AssetClassID.MeshCollider))
+                return null;
+            var bf = component.baseField;
+            static Vector3 Vec(AssetTypeValueField v) => v.IsDummy ? Vector3.Zero : new Vector3(v["x"].AsFloat, v["y"].AsFloat, v["z"].AsFloat);
+            static float Num(AssetTypeValueField v) => v.IsDummy ? 0f : v.AsFloat;
+            try
+            {
+                var center = Vec(bf["m_Center"]);
+                var size = Vec(bf["m_Size"]);
+                var shape = type switch
+                {
+                    AssetClassID.BoxCollider => ColliderShape.Box,
+                    AssetClassID.SphereCollider => ColliderShape.Sphere,
+                    AssetClassID.CapsuleCollider => ColliderShape.Capsule,
+                    _ => ColliderShape.Mesh
+                };
+                if (shape == ColliderShape.Mesh)
+                {
+                    // The mesh's own bounds: enough to see where it collides without decoding it.
+                    var mesh = _session.Ext(component.file, bf["m_Mesh"]);
+                    if (mesh.baseField?["m_LocalAABB"] is not { IsDummy: false } aabb)
+                        return null;
+                    center = Vec(aabb["m_Center"]);
+                    size = Vec(aabb["m_Extent"]) * 2f;
+                }
+
+                return new ColliderInfo
+                {
+                    Path = node.Path,
+                    Shape = shape,
+                    ToRoot = node.ToRoot,
+                    Center = center,
+                    Size = size,
+                    Radius = Num(bf["m_Radius"]),
+                    Height = Num(bf["m_Height"]),
+                    Direction = bf["m_Direction"].IsDummy ? 1 : bf["m_Direction"].AsInt,
+                    IsTrigger = !bf["m_IsTrigger"].IsDummy && bf["m_IsTrigger"].AsBool,
+                    Enabled = node.Active && (bf["m_Enabled"].IsDummy || bf["m_Enabled"].AsBool)
+                };
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
         // Armour/capes keep the on-body mesh under this (inactive) child; Valheim skins it onto the player when equipped.

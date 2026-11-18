@@ -1,0 +1,10 @@
+{
+  "id": "forge_glb_sword",
+  "kind": "item",
+  "base": "SwordBronze",
+  "name": "Glb Sword",
+  "description": "Its blade is a .glb from the pack.",
+  "look": {
+    "mesh": { "file": "models/sword.glb" }
+  }
+}

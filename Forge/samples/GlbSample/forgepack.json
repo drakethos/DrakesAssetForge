@@ -1,0 +1,8 @@
+{
+  "format": 1,
+  "id": "GlbSample",
+  "name": "Glb Sample",
+  "version": "0.1.0",
+  "author": "DrakeMods",
+  "description": "Sample Forge pack: a bronze sword whose mesh comes from a .glb file (exported from Valheim with Export .glb)."
+}

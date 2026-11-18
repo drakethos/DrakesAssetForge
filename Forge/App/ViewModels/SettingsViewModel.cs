@@ -242,6 +242,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         UpdateDuplicates();
     }
 
+    /// <summary>Hold moves shown in centimetres instead of metres (the stored value is always metres).</summary>
+    public bool MoveInCentimetres
+    {
+        get => AppSettings.MoveInCentimetres;
+        set
+        {
+            AppSettings.MoveInCentimetres = value;
+            AppSettings.Save();
+            OnPropertyChanged();
+        }
+    }
+
     [RelayCommand]
     private void Close() => _main.Settings = null;
 }

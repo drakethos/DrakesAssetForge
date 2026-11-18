@@ -44,7 +44,7 @@ public sealed partial class TextureSlotEditor : ObservableObject
     public string Slot { get; }
     public string? VanillaName { get; }
     public string Label => Labels.TryGetValue(Slot, out var label) ? label : Slot.TrimStart('_');
-    public string Detail => CustomFile.Length > 0 ? $"{Slot} · yours: {CustomFile}" : $"{Slot} · {VanillaName ?? "empty"}";
+    public string Detail => IsNone ? $"{Slot} · none (blank)" : CustomFile.Length > 0 ? $"{Slot} · yours: {CustomFile}" : $"{Slot} · {VanillaName ?? "empty"}";
     public bool IsNormalMap => Slot.Contains("Bump", StringComparison.OrdinalIgnoreCase) || Slot.Contains("Normal", StringComparison.OrdinalIgnoreCase);
     public bool CanExport => VanillaName != null;
 
@@ -52,11 +52,30 @@ public sealed partial class TextureSlotEditor : ObservableObject
     [ObservableProperty] private Bitmap? _thumbnail;
     public Bitmap? VanillaThumbnail { get; set; }
     public RgbaImage? CustomImage { get; private set; }
-    public bool IsCustom => CustomFile.Length > 0;
+    /// <summary>Blanked on purpose: the slot is empty in game (no texture), not the base's.</summary>
+    public bool IsNone { get; private set; }
+
+    /// <summary>Anything the recipe will write for this slot: an image, or a blank.</summary>
+    public bool IsCustom => CustomFile.Length > 0 || IsNone;
+
+    public void SetNone()
+    {
+        CustomFile = "";
+        CustomImage = null;
+        IsNone = true;
+        Thumbnail = null;
+        OnPropertyChanged(nameof(Detail));
+        OnPropertyChanged(nameof(IsCustom));
+        _owner.TexturesChanged();
+    }
+
+    [RelayCommand]
+    private void None() => SetNone();
 
     public void SetCustom(string file, PackProject? pack)
     {
         CustomFile = file;
+        IsNone = false;
         CustomImage = Images.LoadFile(pack?.FullPath(file));
         Thumbnail = CustomImage != null ? Images.ToBitmap(CustomImage) : VanillaThumbnail;
         OnPropertyChanged(nameof(Detail));
@@ -77,6 +96,7 @@ public sealed partial class TextureSlotEditor : ObservableObject
     private void Clear()
     {
         CustomFile = "";
+        IsNone = false;
         CustomImage = null;
         Thumbnail = VanillaThumbnail;
         OnPropertyChanged(nameof(Detail));
@@ -280,13 +300,15 @@ public sealed partial class MaterialEditor : ObservableObject
     /// <summary>How a mesh slot using this material draws in the viewport, given what's underneath.</summary>
     public SlotLook Apply(SlotLook under, bool highlight)
     {
-        var albedo = CustomAlbedo ?? Borrowed?.Albedo ?? under.Albedo;
+        // A borrowed material draws its own albedo, never the base's. A blanked colour slot draws no texture at all.
+        var albedo = MainSlot is { IsNone: true } ? null
+            : CustomAlbedo ?? (Borrowed != null ? Borrowed.Albedo : under.Albedo);
         var color = under.Color;
         if (Borrowed != null)
             color = new Vector4(Borrowed.Info.Color[0], Borrowed.Info.Color[1], Borrowed.Info.Color[2], 1);
         if (TintOn && RecipeSerializer.TryParseColor(Tint, out var t))
             color = new Vector4(t[0], t[1], t[2], t[3]);
-        return new SlotLook(albedo, color, highlight);
+        return new SlotLook(albedo, color, highlight, Borrowed == null && under.Translucent);
     }
 
     /// <summary>Decodes vanilla thumbnails the first time this material is shown.</summary>
@@ -391,6 +413,7 @@ public sealed partial class MaterialEditor : ObservableObject
             }
         }
 
+        RebuildTextureSlots();
         if (notify)
         {
             Changed();
@@ -427,6 +450,25 @@ public sealed partial class MaterialEditor : ObservableObject
     {
         BorrowMaterial = "";
         BorrowFrom = "";
+        RebuildTextureSlots();
+    }
+
+    /// <summary>
+    /// The slots are the material that will actually be drawn: the borrowed one if there is one, else the base's.
+    /// The user's own choices (image or blank) on a slot are kept.
+    /// </summary>
+    private void RebuildTextureSlots()
+    {
+        var source = Borrowed?.Info ?? Original;
+        var kept = TextureSlots.Where(t => t.IsCustom).ToDictionary(t => t.Slot);
+        TextureSlots.Clear();
+        if (source != null)
+            foreach (var slot in source.TextureSlots.Distinct().OrderBy(SlotOrder))
+                if (source.Textures.ContainsKey(slot) || slot is "_MainTex" or "_BumpMap" or "_ChestTex" or "_LegsTex")
+                    TextureSlots.Add(kept.Remove(slot, out var edit) ? edit : new TextureSlotEditor(this, slot, source.Textures.GetValueOrDefault(slot)));
+        foreach (var edit in kept.Values)
+            TextureSlots.Add(edit);
+        OnPropertyChanged(nameof(IsModified));
     }
 
     [RelayCommand]

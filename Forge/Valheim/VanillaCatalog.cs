@@ -3,7 +3,11 @@ namespace DrakesForge.Valheim;
 public enum VanillaKind
 {
     Item,
-    Piece
+    Piece,
+    /// <summary>World props: rocks, trees, stumps. Borrow for meshes and kitbash; not editable as items.</summary>
+    Prop,
+    /// <summary>Creatures and characters, one prefab per folder. Borrow for meshes and kitbash.</summary>
+    Character
 }
 
 /// <summary>A vanilla prefab the player can browse. Name is the prefab name recipes refer to ("iron_grate").</summary>
@@ -110,11 +114,18 @@ public sealed class VanillaCatalog
             kind = VanillaKind.Item;
         else if (After(path, "/GameElements/Pieces/", out rest))
             kind = VanillaKind.Piece;
+        else if (After(path, "/world/Props/", out rest))
+            kind = VanillaKind.Prop;
+        else if (After(path, "/Characters/", out rest))
+            kind = VanillaKind.Character;
         else
             return;
 
         var segments = rest.Split('/');
         if (segments.Any(s => NoiseFolders.Contains(s, StringComparer.OrdinalIgnoreCase)))
+            return;
+        // A character's main prefab sits directly in its folder (Characters/Name/Name.prefab); attacks, effects and sounds live deeper.
+        if (kind == VanillaKind.Character && segments.Length != 2)
             return;
 
         entries.Add(new VanillaEntry

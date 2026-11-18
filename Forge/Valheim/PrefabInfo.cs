@@ -24,6 +24,8 @@ public sealed class PrefabInfo
     public AttachPose? Attach { get; init; }
     /// <summary>"_snappoint" children, local to the root, in Unity's axes.</summary>
     public IReadOnlyList<Vector3> SnapPoints { get; init; } = Array.Empty<Vector3>();
+    /// <summary>Every collider in the hierarchy (solid and trigger, on or off), for showing collision.</summary>
+    public IReadOnlyList<ColliderInfo> Colliders { get; init; } = Array.Empty<ColliderInfo>();
 
     internal AssetRef? IconSprite { get; init; }
 
@@ -33,6 +35,28 @@ public sealed class PrefabInfo
 
 /// <summary>Local position, rotation and scale of a prefab's "attach" child, in Unity's axes.</summary>
 public sealed record AttachPose(System.Numerics.Vector3 Position, System.Numerics.Quaternion Rotation, System.Numerics.Vector3 Scale);
+
+public enum ColliderShape { Box, Sphere, Capsule, Mesh }
+
+/// <summary>
+/// One collider, in its node's local space (<see cref="ToRoot"/> takes it to the prefab root). Mesh colliders give their
+/// mesh's bounding box as <see cref="Center"/> and <see cref="Size"/>.
+/// </summary>
+public sealed class ColliderInfo
+{
+    public required string Path { get; init; }
+    public required ColliderShape Shape { get; init; }
+    public required Matrix4x4 ToRoot { get; init; }
+    public Vector3 Center { get; init; }
+    public Vector3 Size { get; init; }
+    public float Radius { get; init; }
+    public float Height { get; init; }
+    /// <summary>Capsule axis: 0 = X, 1 = Y, 2 = Z.</summary>
+    public int Direction { get; init; } = 1;
+    public bool IsTrigger { get; init; }
+    /// <summary>Its object is active and the collider is enabled.</summary>
+    public bool Enabled { get; init; }
+}
 
 public sealed class PieceCost
 {
@@ -82,6 +106,8 @@ public sealed class MaterialInfo
     public IReadOnlyDictionary<string, string> Textures { get; init; } = new Dictionary<string, string>();
     /// <summary>Colour properties and their values (_Color, _EmissionColor…).</summary>
     public IReadOnlyDictionary<string, float[]> Colors { get; init; } = new Dictionary<string, float[]>();
+    /// <summary>Drawn see-through by its colour and texture alpha in the viewport (a .glb BLEND material).</summary>
+    public bool Translucent { get; init; }
 
     internal IReadOnlyDictionary<string, AssetRef> TextureRefs { get; init; } = new Dictionary<string, AssetRef>();
 

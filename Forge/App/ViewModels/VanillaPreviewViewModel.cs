@@ -2,7 +2,9 @@ using System.Numerics;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using DrakesForge.App.Services;
+using DrakesForge.Format;
 using DrakesForge.Valheim;
 
 namespace DrakesForge.App.ViewModels;
@@ -20,10 +22,38 @@ public sealed class MaterialRow
 /// <summary>Read-only preview of one vanilla prefab: model, materials and shaders, icon, facts.</summary>
 public sealed partial class VanillaPreviewViewModel : ObservableObject
 {
+    private readonly VanillaService _vanilla;
+
     public VanillaPreviewViewModel(VanillaEntry entry, VanillaService vanilla)
     {
         Entry = entry;
+        _vanilla = vanilla;
         _ = LoadAsync(vanilla);
+    }
+
+    /// <summary>Outcome of the last Export .glb, shown under the title.</summary>
+    [ObservableProperty] private string? _exportStatus;
+
+    /// <summary>Saves the model as a .glb (worn bind pose for armour that has one) with full-size textures.</summary>
+    [RelayCommand]
+    private async Task ExportGlbAsync()
+    {
+        var worn = WornParts is { Count: > 0 };
+        var path = await Dialogs.SaveFileAsync("Export model", Entry.Name, "glb", "glTF Binary");
+        if (path == null)
+            return;
+        ExportStatus = "Exporting…";
+        try
+        {
+            var model = await _vanilla.LoadModelForExportAsync(Entry, GlbExport.TextureSize)
+                        ?? throw new InvalidOperationException("This prefab has no model.");
+            var result = await Task.Run(() => GlbExport.Write(model, path, worn));
+            ExportStatus = $"Saved {Path.GetFileName(path)}: {result.Triangles:N0} tris, {result.Materials} materials, {result.Textures} textures.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException or GlbException)
+        {
+            ExportStatus = "Couldn't export: " + ex.Message;
+        }
     }
 
     public VanillaEntry Entry { get; }
@@ -42,6 +72,8 @@ public sealed partial class VanillaPreviewViewModel : ObservableObject
     [ObservableProperty] private string _stats = "";
     [ObservableProperty] private string _mode = "Model";
     [ObservableProperty] private bool _hasArmor;
+    /// <summary>The prefab has an icon to borrow (items and pieces).</summary>
+    [ObservableProperty] private bool _hasIcon;
     [ObservableProperty] private Bitmap? _armorChest;
     [ObservableProperty] private Bitmap? _armorLegs;
     [ObservableProperty] private IReadOnlyList<ModelPart>? _wornParts;
@@ -93,6 +125,7 @@ public sealed partial class VanillaPreviewViewModel : ObservableObject
 
             if (model?.WornParts.Count > 0)
                 WornParts = model.WornParts;
+            HasIcon = preview.Info.HasIcon;
             if (preview.Info.ArmorMaterial is { } armor)
             {
                 HasArmor = true;

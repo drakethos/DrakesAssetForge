@@ -9,7 +9,7 @@ namespace DrakesForge.App.Services;
 /// <summary>How the plain C# export is written.</summary>
 public sealed class LiteOptions
 {
-    public const string LibsDependency = "DrakeMods-DrakeModsLibs-0.10.0";
+    public const string LibsDependency = "DrakeMods-DrakeModsLibs-0.11.0";
 
     /// <summary>Call DrakeModsLibs.Forge instead of writing a ForgeLite helper next to the items.</summary>
     public bool UseLibs { get; init; }
@@ -79,7 +79,7 @@ public static class LiteCodeWriter
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private static readonly HashSet<string> UnityComponents = new(ComponentCatalog.UnityComponents) { "Collider", "MeshFilter", "MeshRenderer", "Transform", "Light", "AudioSource" };
-    private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg" };
+    private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".glb" };
 
     public static string DefaultFolder(PackProject pack) => CodeProjectWriter.DefaultFolder(pack) + "-plain";
 
@@ -188,7 +188,7 @@ public static class LiteCodeWriter
             var csproj = CodeProjectWriter.Csproj(name, ns, author, pack.Manifest.Version, "Assets");
             if (o.Embed)
                 csproj = csproj.Replace("<None Include=\"Assets\\**\\*\" CopyToOutputDirectory=\"PreserveNewest\" />",
-                    "<!-- Images live inside the DLL: nothing to lose when a mod manager flattens folders. -->\n    <EmbeddedResource Include=\"Assets\\**\\*.png;Assets\\**\\*.jpg\" />");
+                    "<!-- Images live inside the DLL: nothing to lose when a mod manager flattens folders. -->\n    <EmbeddedResource Include=\"Assets\\**\\*.png;Assets\\**\\*.jpg;Assets\\**\\*.glb\" />");
             if (o.UseLibs)
                 csproj = csproj.Replace("<Reference Include=\"assembly_valheim\"",
                     "<Reference Include=\"DrakeModsLibs\" HintPath=\"$(BepInExPath)\\plugins\\DrakeMods-DrakeModsLibs\\DrakeModsLibs.dll\" Private=\"false\" />\n    <Reference Include=\"assembly_valheim\"");
@@ -295,7 +295,7 @@ public static class LiteCodeWriter
                 break;
         }
 
-        Dress(recipe, types, l => L(l), lookOnly: false);
+        Dress(recipe, types, l => L(l), lookOnly: false, o.UseLibs);
 
         L();
         L($"Customize.{type}.OnBuilt(prefab);");
@@ -334,7 +334,7 @@ public static class LiteCodeWriter
     /// Everything after the prefab exists, in Forge's order: structure, look, names, settings, snap, fire, glow.
     /// Looks-only leaves out names (the mod sets them), the icon (exposed as <c>Icon</c>) and sprites (<c>Build</c>).
     /// </summary>
-    private static void Dress(ItemRecipe recipe, LiteTypeInfo types, Action<string> line, bool lookOnly)
+    private static void Dress(ItemRecipe recipe, LiteTypeInfo types, Action<string> line, bool lookOnly, bool libs)
     {
         void L(string text = "") => line(text);
 
@@ -349,14 +349,19 @@ public static class LiteCodeWriter
         }
 
         var look = recipe.Look;
-        if (!look.IsEmpty && (!lookOnly || look.Mesh != null || look.Materials.Count > 0 || look.HideMesh || look.HideMeshes.Count > 0 || look.HasScale || look.Parts.Count > 0))
+        if (!look.IsEmpty && (!lookOnly || look.Mesh != null || look.Materials.Count > 0 || look.HideMesh || look.HideMeshes.Count > 0 || look.HasScale || look.Parts.Count > 0 || look.Collision != null))
         {
             L();
             L("// Look");
             if (look.Mesh?.Prefab is { } mesh)
                 L($"ForgeLite.BorrowMesh(prefab, {Str(mesh)});");
+            // .glb models and collision boxes come from DrakeModsLibs; the stand-alone helper has no glTF reader.
             if (look.Mesh?.File is { } file)
-                L($"// TODO: model file {file} isn't supported by the plain export yet.");
+                L(libs ? $"ForgeLook.Model(Owner, prefab, {Str(file)});" : $"// TODO: model file {file} needs \"Use DrakeModsLibs\" (--libs).");
+            if (look.Collision is { Mode: CollisionMode.Box } box)
+                L(libs ? $"ForgeLook.CollisionBox(prefab, {V(box.Center)}, {V(box.Size)});" : "// TODO: the collision box needs \"Use DrakeModsLibs\" (--libs).");
+            else if (look.Collision is { Mode: CollisionMode.Mesh })
+                L("// TODO: model-shaped collision isn't supported by the plain export yet.");
             foreach (var ov in look.Materials)
                 MaterialCall(ov, L);
             if (look.Icon != null && !lookOnly)
@@ -600,7 +605,7 @@ public static class LiteCodeWriter
             ? "Your own code registers the items and calls, for example, `Items.PaperSheet.Build(decor.transform, scale)` and `Items.PaperSheet.Icon`."
             : $"In your plugin's `Awake()`:\n\n```csharp\n{ns}.ForgeLiteItems.Register(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Info.Location)!, \"Assets\"));\n```";
         var images = o.Embed
-            ? $"In your `.csproj`, put the images inside the DLL (safe when Hexium/Gale flatten folders):\n\n```xml\n<ItemGroup>\n  <EmbeddedResource Include=\"{folder}Assets\\**\\*.png;{folder}Assets\\**\\*.jpg\" />\n</ItemGroup>\n```"
+            ? $"In your `.csproj`, put the images inside the DLL (safe when Hexium/Gale flatten folders):\n\n```xml\n<ItemGroup>\n  <EmbeddedResource Include=\"{folder}Assets\\**\\*.png;{folder}Assets\\**\\*.jpg;{folder}Assets\\**\\*.glb\" />\n</ItemGroup>\n```"
             : $"In your `.csproj`, ship the images beside the DLL:\n\n```xml\n<ItemGroup>\n  <None Include=\"{folder}Assets\\**\\*\" CopyToOutputDirectory=\"PreserveNewest\" />\n</ItemGroup>\n```";
         var refs = o.UseLibs
             ? "References: DrakeModsLibs 0.10+ (its `DrakeModsLibs.Forge` helpers), Jotunn, assembly_valheim, UnityEngine.CoreModule."
@@ -634,7 +639,7 @@ public static class LiteCodeWriter
                          $"new Vector3({F(s.Rotation.X)}, {F(s.Rotation.Y)}, {F(s.Rotation.Z)}), {Bool(s.DoubleSided)});\n");
 
         var dress = new StringBuilder();
-        Dress(recipe, types, l => dress.Append(l.Length == 0 ? "" : "        " + l).Append('\n'), lookOnly: true);
+        Dress(recipe, types, l => dress.Append(l.Length == 0 ? "" : "        " + l).Append('\n'), lookOnly: true, o.UseLibs);
         var dressBody = dress.ToString().Trim('\n');
 
         var icon = recipe.Look.Icon != null

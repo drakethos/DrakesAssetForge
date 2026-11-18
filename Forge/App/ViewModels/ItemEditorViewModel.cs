@@ -81,6 +81,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         _meshFrom = recipe.Look.Mesh?.Prefab ?? "";
         _modelFile = recipe.Look.Mesh?.File ?? "";
         _iconFile = recipe.Look.Icon ?? "";
+        _iconPrefab = recipe.Look.IconPrefab ?? "";
+        _iconTint = recipe.Look.IconTint ?? "";
 
         var glow = recipe.Behaviours.FirstOrDefault(b => b.Type.Equals("glow", StringComparison.OrdinalIgnoreCase));
         _glowOn = glow != null;
@@ -109,13 +111,15 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         Components = new ComponentsPanel(ScheduleSave);
 
         _hideMesh = recipe.Look.HideMesh;
-        _holdX = recipe.Look.HoldPosition.X;
-        _holdY = recipe.Look.HoldPosition.Y;
-        _holdZ = recipe.Look.HoldPosition.Z;
-        _holdRotX = recipe.Look.HoldRotation.X;
-        _holdRotY = recipe.Look.HoldRotation.Y;
-        _holdRotZ = recipe.Look.HoldRotation.Z;
-        _holdScale = recipe.Look.HoldScale.X;
+        _holdX = (decimal)recipe.Look.HoldPosition.X;
+        _holdY = (decimal)recipe.Look.HoldPosition.Y;
+        _holdZ = (decimal)recipe.Look.HoldPosition.Z;
+        _holdRotX = (decimal)recipe.Look.HoldRotation.X;
+        _holdRotY = (decimal)recipe.Look.HoldRotation.Y;
+        _holdRotZ = (decimal)recipe.Look.HoldRotation.Z;
+        _holdScaleX = (decimal)recipe.Look.HoldScale.X;
+        _holdScaleY = (decimal)recipe.Look.HoldScale.Y;
+        _holdScaleZ = (decimal)recipe.Look.HoldScale.Z;
         _modelScale = Math.Round(recipe.Look.Scale.X, 4);
         if (recipe.Look.Scale.X != recipe.Look.Scale.Y || recipe.Look.Scale.Y != recipe.Look.Scale.Z)
             _modelScaleVector = recipe.Look.Scale;
@@ -125,6 +129,11 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         Sprites.CollectionChanged += OnRowsChanged;
         foreach (var s in recipe.Look.Sprites)
             AddSpriteRow(SpriteRow.From(s, Images.LoadFile(main.Pack?.FullPath(s.File))));
+
+        var collision = recipe.Look.Collision;
+        _collisionMode = (collision?.Mode ?? Format.CollisionMode.Base).ToString().ToLowerInvariant();
+        _boxCenter = collision is { Mode: Format.CollisionMode.Box } ? new Vector3(collision.Center.X, collision.Center.Y, collision.Center.Z) : Vector3.Zero;
+        _boxSize = collision is { Mode: Format.CollisionMode.Box } ? new Vector3(collision.Size.X, collision.Size.Y, collision.Size.Z) : Vector3.Zero;
 
         _snapMode = (recipe.Snap?.Mode ?? Format.SnapMode.Keep).ToString().ToLowerInvariant();
         foreach (var p in recipe.Snap?.Points ?? new List<Vec3>())
@@ -176,13 +185,17 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     public bool TabComponents => Tab == "Components";
     public bool TabRecipe => Tab == "Recipe";
     public bool TabSnap => Tab == "Snap";
+    public bool TabCollision => Tab == "Collision";
+    public bool HasCollisionTab => !IsReskin;
 
     // Viewport
     [ObservableProperty] private IReadOnlyList<ModelPart>? _parts;
     [ObservableProperty] private Func<int, SlotLook>? _look;
     [ObservableProperty] private IReadOnlyList<Marker>? _markers;
+    [ObservableProperty] private IReadOnlyList<Wire>? _wires;
     [ObservableProperty] private string? _viewportMessage = "Loading…";
     [ObservableProperty] private bool _showSnapPoints;
+    [ObservableProperty] private bool _showCollision;
     [ObservableProperty] private bool _compareToBase;
     /// <summary>Armour/capes: show the mesh as worn instead of the dropped model.</summary>
     [ObservableProperty] private bool _showWorn;
@@ -204,25 +217,28 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
 
     partial void OnModelFileErrorChanged(string value) => OnPropertyChanged(nameof(HasModelFileError));
 
-    // Hold pose (items): how the held item sits, as offsets on Valheim's own attach pose. See HoldDelta.
-    [ObservableProperty] private float _holdX;
-    [ObservableProperty] private float _holdY;
-    [ObservableProperty] private float _holdZ;
-    [ObservableProperty] private float _holdRotX;
-    [ObservableProperty] private float _holdRotY;
-    [ObservableProperty] private float _holdRotZ;
-    [ObservableProperty] private float _holdScale = 1f;
-    [ObservableProperty] private bool _showReference = true;
-    private IReadOnlyList<ModelPart> _referenceParts = Array.Empty<ModelPart>();
+    // Hold pose (items): how the held item sits, as offsets on Valheim's own attach pose. See ViewTransforms.
+    [ObservableProperty] private decimal? _holdX = 0;
+    [ObservableProperty] private decimal? _holdY = 0;
+    [ObservableProperty] private decimal? _holdZ = 0;
+    [ObservableProperty] private decimal? _holdRotX = 0;
+    [ObservableProperty] private decimal? _holdRotY = 0;
+    [ObservableProperty] private decimal? _holdRotZ = 0;
+    [ObservableProperty] private decimal? _holdScaleX = 1;
+    [ObservableProperty] private decimal? _holdScaleY = 1;
+    [ObservableProperty] private decimal? _holdScaleZ = 1;
+    [ObservableProperty] private bool _showMannequin = true;
 
-    partial void OnHoldXChanged(float value) => HoldChanged();
-    partial void OnHoldYChanged(float value) => HoldChanged();
-    partial void OnHoldZChanged(float value) => HoldChanged();
-    partial void OnHoldRotXChanged(float value) => HoldChanged();
-    partial void OnHoldRotYChanged(float value) => HoldChanged();
-    partial void OnHoldRotZChanged(float value) => HoldChanged();
-    partial void OnHoldScaleChanged(float value) => HoldChanged();
-    partial void OnShowReferenceChanged(bool value) => HoldChanged();
+    partial void OnHoldXChanged(decimal? value) => HoldChanged();
+    partial void OnHoldYChanged(decimal? value) => HoldChanged();
+    partial void OnHoldZChanged(decimal? value) => HoldChanged();
+    partial void OnHoldRotXChanged(decimal? value) => HoldChanged();
+    partial void OnHoldRotYChanged(decimal? value) => HoldChanged();
+    partial void OnHoldRotZChanged(decimal? value) => HoldChanged();
+    partial void OnHoldScaleXChanged(decimal? value) => HoldChanged();
+    partial void OnHoldScaleYChanged(decimal? value) => HoldChanged();
+    partial void OnHoldScaleZChanged(decimal? value) => HoldChanged();
+    partial void OnShowMannequinChanged(bool value) => HoldChanged();
 
     private void HoldChanged()
     {
@@ -232,37 +248,68 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         ScheduleSave();
     }
 
+    // Move boxes show centimetres or metres (AppSettings.MoveInCentimetres); the recipe always stores metres.
+    private static bool Cm => AppSettings.MoveInCentimetres;
+    private static decimal? ToShown(decimal? metres) => metres is decimal d ? (Cm ? Math.Round(d * 100, 2) : d) : null;
+    private static decimal? FromShown(decimal? shown) => shown is decimal d ? (Cm ? d / 100 : d) : null;
+
+    public string MoveUnit => Cm ? "cm" : "m";
+    public string MoveHeader => $"Move ({MoveUnit})";
+    public string MoveFormat => Cm ? "0.0" : "0.00";
+    public decimal MoveStep => Cm ? 1m : 0.01m;
+    public decimal MoveLimit => Cm ? 500m : 5m;
+    public decimal MoveMin => -MoveLimit;
+    public decimal MoveMax => MoveLimit;
+
+    public decimal? MoveXShown { get => ToShown(HoldX); set => HoldX = FromShown(value); }
+    public decimal? MoveYShown { get => ToShown(HoldY); set => HoldY = FromShown(value); }
+    public decimal? MoveZShown { get => ToShown(HoldZ); set => HoldZ = FromShown(value); }
+
     [RelayCommand]
     private void ResetHold()
     {
         _holdX = _holdY = _holdZ = _holdRotX = _holdRotY = _holdRotZ = 0;
-        _holdScale = 1;
+        _holdScaleX = _holdScaleY = _holdScaleZ = 1;
         OnPropertyChanged(nameof(HoldX));
         OnPropertyChanged(nameof(HoldY));
         OnPropertyChanged(nameof(HoldZ));
         OnPropertyChanged(nameof(HoldRotX));
         OnPropertyChanged(nameof(HoldRotY));
         OnPropertyChanged(nameof(HoldRotZ));
-        OnPropertyChanged(nameof(HoldScale));
+        OnPropertyChanged(nameof(HoldScaleX));
+        OnPropertyChanged(nameof(HoldScaleY));
+        OnPropertyChanged(nameof(HoldScaleZ));
         HoldChanged();
     }
 
+    /// <summary>The item drawn as Valheim holds it, against the figure: items only, with the figure shown.</summary>
+    private bool HeldView => IsItem && ShowMannequin && _base?.Info.Attach != null;
+
+    private Vector3 HoldScaleVector => IsItem ? new Vector3(S(HoldScaleX), S(HoldScaleY), S(HoldScaleZ)) : Vector3.One;
+
     /// <summary>
-    /// The hold offset in the prefab's own (Unity) space: from the vanilla attach pose to the pose the runtime builds
-    /// (position added, rotation multiplied by Euler(hold), scale multiplied). Null when there's nothing to apply.
+    /// Unity-space transforms from the prefab (root) space the model and kitbash parts are read in, to the viewport,
+    /// plus the rotation for normals. Dropped/placed: scaled. Held: as Forge Runtime builds it (see HoldPose) —
+    /// Valheim mounts attach on the hand with its position and rotation zeroed, so the vanilla attach pose is undone,
+    /// then the hold turn, attach's scale and the hold move (in metres) are applied.
     /// </summary>
-    private Matrix4x4? HoldDelta()
+    private (Matrix4x4 Model, Matrix4x4 Parts, Matrix4x4 Normals) ViewTransforms()
     {
-        if (!IsItem || _base?.Info.Attach is not { } pose)
-            return null;
-        if (HoldX == 0 && HoldY == 0 && HoldZ == 0 && HoldRotX == 0 && HoldRotY == 0 && HoldRotZ == 0 && HoldScale == 1)
-            return null;
-        var vanilla = Trs(pose.Position, pose.Rotation, pose.Scale);
-        var held = Trs(pose.Position + new Vector3(HoldX, HoldY, HoldZ),
-            pose.Rotation * UnityEuler(HoldRotX, HoldRotY, HoldRotZ),
-            pose.Scale * new Vector3(HoldScale, HoldScale, HoldScale));
-        Matrix4x4.Invert(vanilla, out var inverse);
-        return inverse * held;
+        var modelScale = ViewScale;
+        if (!HeldView || _base?.Info.Attach is not { } pose)
+        {
+            var scale = Matrix4x4.CreateScale(modelScale * HoldScaleVector);
+            return (scale, scale, Matrix4x4.Identity);
+        }
+
+        var turn = Matrix4x4.CreateFromQuaternion(UnityEuler(F(HoldRotX), F(HoldRotY), F(HoldRotZ)));
+        var beforeHold = pose.Scale * modelScale;
+        var tail = turn * Matrix4x4.CreateScale(beforeHold * HoldScaleVector) * Matrix4x4.CreateTranslation(F(HoldX), F(HoldY), F(HoldZ));
+        Matrix4x4.Invert(Trs(pose.Position, pose.Rotation, pose.Scale), out var vanilla);
+        // Kitbash parts sit in a holder at the prefab root's pose under the already scaled attach (see Parts.Apply).
+        Matrix4x4.Invert(Trs(pose.Position, pose.Rotation, beforeHold), out var scaledAttach);
+        var normals = Matrix4x4.CreateFromQuaternion(Quaternion.Inverse(pose.Rotation)) * turn;
+        return (vanilla * tail, Matrix4x4.CreateScale(beforeHold) * scaledAttach * tail, normals);
     }
 
     private static Matrix4x4 Trs(Vector3 position, Quaternion rotation, Vector3 scale) =>
@@ -276,30 +323,11 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
 
     private static float ToRadians(float degrees) => degrees * MathF.PI / 180f;
 
-    /// <summary>The viewport draws parts mirrored in X (see PartRow.Transform); this converts a Unity-space transform to that frame.</summary>
-    private static Matrix4x4 ToViewport(Matrix4x4 unity)
-    {
-        var mirror = Matrix4x4.CreateScale(-1, 1, 1);
-        return mirror * unity * mirror;
-    }
+    /// <summary>A hold number from its box: blank counts as 0 (position and turn).</summary>
+    private static float F(decimal? value) => value is decimal d ? (float)d : 0f;
 
-    private async Task LoadReferenceAsync()
-    {
-        _referenceParts = Array.Empty<ModelPart>();
-        // Rocks in the world aren't in the item/piece catalog; a one-metre stone block is, and works as the scale reference.
-        var rock = new[] { "stone_wall_1x1", "stone_pillar" }.FirstOrDefault(n => Vanilla?.Catalog.ByName.ContainsKey(n) == true);
-        if (rock == null || Vanilla?.TryLoadPreviewAsync(rock) is not { } task)
-            return;
-        try
-        {
-            _referenceParts = (await task)?.Model?.Parts.ToList() ?? new List<ModelPart>();
-        }
-        catch (Exception)
-        {
-            // Without a reference the helper still works; it just has no rock.
-        }
-        Refresh();
-    }
+    /// <summary>A hold scale from its box: blank or 0 counts as 1, since a zero scale would hide the item.</summary>
+    private static float S(decimal? value) => value is decimal d && d != 0 ? (float)d : 1f;
 
     partial void OnModelFileChanged(string value)
     {
@@ -324,6 +352,34 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         ModelFileError = error ?? "";
     }
     [ObservableProperty] private string _iconFile;
+    [ObservableProperty] private string _iconPrefab = "";
+    /// <summary>"#RRGGBB" multiplied over the icon; blank for none.</summary>
+    [ObservableProperty] private string _iconTint = "";
+
+    partial void OnIconTintChanged(string value)
+    {
+        LoadIcon();
+        ScheduleSave();
+    }
+
+    [RelayCommand]
+    private void ClearIconTint() => IconTint = "";
+
+    /// <summary>The icon with the tint multiplied in, for the preview (the game does the same on load).</summary>
+    private RgbaImage Tinted(RgbaImage image)
+    {
+        if (!RecipeSerializer.TryParseColor(IconTint, out var c))
+            return image;
+        var bgra = new byte[image.Bgra.Length];
+        for (var i = 0; i < bgra.Length; i += 4)
+        {
+            bgra[i] = (byte)(image.Bgra[i] * c[2]);
+            bgra[i + 1] = (byte)(image.Bgra[i + 1] * c[1]);
+            bgra[i + 2] = (byte)(image.Bgra[i + 2] * c[0]);
+            bgra[i + 3] = image.Bgra[i + 3];
+        }
+        return new RgbaImage { Width = image.Width, Height = image.Height, Bgra = bgra };
+    }
     [ObservableProperty] private Bitmap? _iconImage;
     [ObservableProperty] private string _scripts = "";
 
@@ -598,12 +654,163 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     public bool LockZ => SnapConstraint == "z";
     public bool LockFloor => SnapConstraint == "floor";
     public static readonly double[] GridSteps = { 0, 0.05, 0.1, 0.25, 0.5, 1 };
-    public bool MarkerEditing => (TabSnap && SnapEditable) || (TabLook && HasParts);
+    public bool MarkerEditing => (TabSnap && SnapEditable) || (TabLook && HasParts) || (TabCollision && CollisionBox);
     public string ViewportHint => !MarkerEditing
         ? "Drag to orbit · wheel to zoom · double-click to reset. Approximate shading; Push to game for the real look."
         : TabLook
             ? "Drag a purple P handle to move that part · Delete removes the selected part · drag elsewhere to orbit · wheel to zoom"
-            : "Drag a numbered point to move it · Delete removes the selected one · drag elsewhere to orbit · wheel to zoom";
+            : TabCollision
+                ? "Drag the green C handle to move the box, or a side handle (top, left…) to move that side · drag elsewhere to orbit · wheel to zoom"
+                : "Drag a numbered point to move it · Delete removes the selected one · drag elsewhere to orbit · wheel to zoom";
+
+    // Collision: keep the base's colliders, or one box / the model's own meshes instead.
+    public static readonly string[] CollisionModes = { "base", "box", "mesh" };
+    [ObservableProperty] private string _collisionMode;
+    /// <summary>The box, local to the prefab root before look.scale (metres), as the recipe stores it.</summary>
+    private Vector3 _boxCenter;
+    private Vector3 _boxSize;
+
+    public bool CollisionBase => CollisionMode == "base";
+    public bool CollisionBox => CollisionMode == "box";
+    public bool CollisionMesh => CollisionMode == "mesh";
+    public string BaseCollisionText => _base?.Info.Colliders is not { } colliders
+        ? ""
+        : colliders.Count(c => !c.IsTrigger && c.Enabled) is var solid and > 0
+            ? $"The base collides with {solid} shape{(solid == 1 ? "" : "s")} (blue outlines). {(CollisionBase ? "" : "They are switched off in game; triggers stay.")}"
+            : "The base has no solid collision.";
+    /// <summary>A MeshCollider added on the Components tab sits on the root, which has no mesh, so it collides with nothing.</summary>
+    public bool HasRootMeshCollider => Components.AddedNames.Contains("MeshCollider");
+
+    /// <summary>Pieces scale their root, so the box scales with the model; items scale only attach, so it doesn't.</summary>
+    private Vector3 BoxScale => IsItem ? Vector3.One : ViewScale;
+
+    public decimal? BoxCenterX { get => BoxShown(_boxCenter.X); set => SetBox(value, null, 0); }
+    public decimal? BoxCenterY { get => BoxShown(_boxCenter.Y); set => SetBox(value, null, 1); }
+    public decimal? BoxCenterZ { get => BoxShown(_boxCenter.Z); set => SetBox(value, null, 2); }
+    public decimal? BoxSizeX { get => BoxShown(_boxSize.X); set => SetBox(null, value, 0); }
+    public decimal? BoxSizeY { get => BoxShown(_boxSize.Y); set => SetBox(null, value, 1); }
+    public decimal? BoxSizeZ { get => BoxShown(_boxSize.Z); set => SetBox(null, value, 2); }
+    public decimal SizeMin => Cm ? 1m : 0.01m;
+
+    private static decimal? BoxShown(float metres) => ToShown((decimal)Math.Round(metres, 4));
+
+    private void SetBox(decimal? center, decimal? size, int axis)
+    {
+        if (FromShown(center ?? size) is not decimal metres)
+            return;
+        var v = (float)metres;
+        if (center != null)
+            _boxCenter = With(_boxCenter, axis, v);
+        else
+            _boxSize = With(_boxSize, axis, Math.Max(v, 0.01f));
+        BoxEdited(save: true);
+    }
+
+    private static Vector3 With(Vector3 v, int axis, float value) => axis == 0 ? v with { X = value } : axis == 1 ? v with { Y = value } : v with { Z = value };
+    private static float Axis(Vector3 v, int axis) => axis == 0 ? v.X : axis == 1 ? v.Y : v.Z;
+
+    private void BoxEdited(bool save)
+    {
+        foreach (var name in new[] { nameof(BoxCenterX), nameof(BoxCenterY), nameof(BoxCenterZ), nameof(BoxSizeX), nameof(BoxSizeY), nameof(BoxSizeZ) })
+            OnPropertyChanged(name);
+        Refresh();
+        if (save)
+            ScheduleSave();
+    }
+
+    partial void OnCollisionModeChanged(string value)
+    {
+        foreach (var name in new[] { nameof(CollisionBase), nameof(CollisionBox), nameof(CollisionMesh), nameof(BaseCollisionText), nameof(MarkerEditing), nameof(ViewportHint) })
+            OnPropertyChanged(name);
+        // A new box starts around the model.
+        if (value == "box" && (_boxSize.X <= 0 || _boxSize.Y <= 0 || _boxSize.Z <= 0))
+            FitCollision();
+        Refresh();
+        ScheduleSave();
+    }
+
+    partial void OnShowCollisionChanged(bool value) => Refresh();
+
+    [RelayCommand]
+    private void SetCollisionMode(string mode) => CollisionMode = mode;
+
+    /// <summary>The box hugs the model as drawn (model scale included).</summary>
+    [RelayCommand]
+    private void FitCollision()
+    {
+        if (_shape.IsEmpty)
+            return;
+        var toBox = ViewScale / BoxScale;
+        _boxCenter = Round(_shape.Center * toBox);
+        _boxSize = Round(Vector3.Max(_shape.Size * toBox, new Vector3(0.01f)));
+        BoxEdited(save: true);
+    }
+
+    private static Vector3 Round(Vector3 v) => new((float)Math.Round(v.X, 3), (float)Math.Round(v.Y, 3), (float)Math.Round(v.Z, 3));
+
+    /// <summary>Marker ids from here up are the collision box: the centre, then the +X, −X, +Y, −Y, +Z, −Z sides.</summary>
+    private const int BoxMarkerBase = 2000;
+    // Named as the viewport's compass shows them: right is −X, front is +Z.
+    private static readonly string[] FaceLabels = { "left", "right", "top", "bottom", "front", "back" };
+
+    private IEnumerable<Marker> BoxMarkers()
+    {
+        var scale = BoxScale;
+        yield return new Marker(_boxCenter * scale, 0xFF7CE88A, 11, BoxMarkerBase, "C");
+        for (var face = 0; face < 6; face++)
+        {
+            var axis = face / 2;
+            var sign = face % 2 == 0 ? 1f : -1f;
+            var at = With(_boxCenter, axis, Axis(_boxCenter, axis) + sign * Axis(_boxSize, axis) / 2f);
+            yield return new Marker(at * scale, 0xFF4FB862, 9, BoxMarkerBase + 1 + face, FaceLabels[face]);
+        }
+    }
+
+    /// <summary>Drags the centre (moves the box) or one face (that side moves, the opposite side stays).</summary>
+    private void MoveBoxMarker(int id, Vector3 local, string constraint)
+    {
+        var snapped = SnapGeometry.Snap(local, _shape, SnapToEdges, (float)SnapGrid,
+            constraint is "free" or "x" or "floor", constraint is "free" or "y", constraint is "free" or "z" or "floor");
+        if (id == BoxMarkerBase)
+        {
+            _boxCenter = Round(snapped);
+        }
+        else
+        {
+            var face = id - BoxMarkerBase - 1;
+            var axis = face / 2;
+            var sign = face % 2 == 0 ? 1f : -1f;
+            var opposite = Axis(_boxCenter, axis) - sign * Axis(_boxSize, axis) / 2f;
+            var moved = Axis(snapped, axis);
+            if ((moved - opposite) * sign < 0.01f)
+                moved = opposite + sign * 0.01f;
+            _boxCenter = Round(With(_boxCenter, axis, (moved + opposite) / 2f));
+            _boxSize = Round(With(_boxSize, axis, Math.Abs(moved - opposite)));
+        }
+        BoxEdited(save: false);
+    }
+
+    /// <summary>Collision outlines: the base's colliders (blue when used, dim red when switched off), triggers, and the box.</summary>
+    private List<Wire> CollisionWires(bool compare)
+    {
+        var wires = new List<Wire>();
+        if (_base == null)
+            return wires;
+        var replaced = !compare && !CollisionBase;
+        var scale = Matrix4x4.CreateScale(ViewScale);
+        foreach (var c in _base.Info.Colliders.Where(c => c.Enabled))
+        {
+            // Item colliders on the root keep their size; the model scale is on attach.
+            var toView = IsItem && !c.Path.StartsWith(AttachPath, StringComparison.Ordinal) ? Matrix4x4.Identity : scale;
+            var color = c.IsTrigger ? 0x80E8C83Cu : replaced ? 0x70E05A5Au : 0xFF5FB4F0u;
+            CollisionGeometry.AddCollider(wires, c, toView, color);
+        }
+        if (!compare && CollisionBox)
+            CollisionGeometry.AddBox(wires, _boxCenter, _boxSize, Matrix4x4.CreateScale(BoxScale), 0xFF7CE88A);
+        return wires;
+    }
+
+    private const string AttachPath = "attach";
 
     partial void OnSnapConstraintChanged(string value)
     {
@@ -658,6 +865,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     // (scaled) space; points and parts are stored in the model's own space.
     public void SelectMarker(int id)
     {
+        if (id >= BoxMarkerBase)
+            return;
         if (id >= PartMarkerBase)
             SelectedPart = PartRows.ElementAtOrDefault(id - PartMarkerBase);
         else
@@ -666,7 +875,14 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
 
     public void MoveMarker(int id, Vector3 unityPosition, string constraint)
     {
+        if (id >= BoxMarkerBase)
+        {
+            MoveBoxMarker(id, unityPosition / BoxScale, constraint);
+            return;
+        }
         var local = unityPosition / ViewScale;
+        if (id >= PartMarkerBase && Matrix4x4.Invert(ViewTransforms().Parts, out var fromView))
+            local = Vector3.Transform(unityPosition, fromView);
         var snapped = SnapGeometry.Snap(local, _shape, SnapToEdges, (float)SnapGrid,
             constraint is "free" or "x" or "floor", constraint is "free" or "y", constraint is "free" or "z" or "floor");
         if (id >= PartMarkerBase)
@@ -679,6 +895,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
 
     public void DeleteMarker(int id)
     {
+        if (id >= BoxMarkerBase)
+            return;
         if (id >= PartMarkerBase)
         {
             PartRows.ElementAtOrDefault(id - PartMarkerBase)?.RemoveCommand?.Execute(null);
@@ -733,8 +951,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         BaseSnapText = _base.Info.SnapPoints.Count == 0
             ? "The base has no snap points."
             : $"The base has {_base.Info.SnapPoints.Count}: {string.Join("  ", _base.Info.SnapPoints.Select(p => $"({p.X:0.##}, {p.Y:0.##}, {p.Z:0.##})"))}";
+        OnPropertyChanged(nameof(BaseCollisionText));
         LoadFileModel();
-        _ = LoadReferenceAsync();
         await LoadMeshSourceAsync();
         BuildMaterialEditors();
         LoadIcon();
@@ -806,9 +1024,11 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
     private void LoadIcon()
     {
         if (IconFile.Length > 0 && Images.LoadFile(Pack?.FullPath(IconFile)) is { } custom)
-            IconImage = Images.ToBitmap(custom);
+            IconImage = Images.ToBitmap(Tinted(custom));
+        else if (IconFile.Length == 0 && IconPrefab.Length > 0 && Vanilla?.Catalog.ByName.TryGetValue(IconPrefab, out var source) == true)
+            Vanilla?.RequestIcon(source, bitmap => IconImage = bitmap);
         else
-            IconImage = _base?.Icon != null ? Images.ToBitmap(_base.Icon) : null;
+            IconImage = _base?.Icon != null ? Images.ToBitmap(Tinted(_base.Icon)) : null;
     }
 
     /// <summary>Re-render with current edits.</summary>
@@ -818,6 +1038,7 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         if (model == null)
         {
             Parts = null;
+            Wires = null;
             ViewportMessage ??= "No model";
             return;
         }
@@ -827,31 +1048,35 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         var hidden = HiddenMeshPaths();
         if (hidden.Count > 0 && ReferenceEquals(model, _base?.Model))
             parts.RemoveAll(p => hidden.Contains(RendererPath(p.Name)));
-        if (!worn && !CompareToBase && HoldDelta() is { } hold)
-            parts = parts.Select(p => PartRow.Transform(p, ToViewport(hold), ToViewport(hold), p.MaterialSlot)).ToList();
         var scale = ViewScale;
         // Parts, scale and sprites belong to the dropped/placed model, as in game.
         if (!worn && !CompareToBase)
         {
             if (HideMesh)
                 parts.Clear();
-            for (var i = 0; i < PartRows.Count; i++)
-                parts.AddRange(PartRows[i].ViewParts(i));
-            // A stone block about 1 m beside the item, for scale. Drawn with the base's first material slot.
-            if (IsItem && ShowReference && _referenceParts.Count > 0 && (ShownModel?.Materials.Count ?? 0) > 0)
+            var kitbash = PartRows.SelectMany((row, i) => row.ViewParts(i)).ToList();
+            // Snap points belong to the placed model, in its own (unscaled) space.
+            _shape = SnapGeometry.Bounds(parts.Concat(kitbash));
+            ShapeText = _shape.IsEmpty ? "" : $"Model: {_shape.Size.X:0.##} wide × {_shape.Size.Y:0.##} tall × {_shape.Size.Z:0.##} deep (m)";
+
+            var (toModel, toParts, normals) = ViewTransforms();
+            parts = parts.Select(p => PartRow.Transform(p, toModel, normals, p.MaterialSlot))
+                .Concat(kitbash.Select(p => PartRow.Transform(p, toParts, normals, p.MaterialSlot))).ToList();
+            if (HeldView)
             {
-                var beside = ToViewport(Matrix4x4.CreateTranslation(1.2f, 0, 0));
-                parts.AddRange(_referenceParts.Select(p => PartRow.Transform(p, beside, beside, 0)));
+                // A figure with its right hand at the hand bone. Sprites sit on the item's root, so they aren't held.
+                parts.AddRange(Mannequin.Parts());
             }
-            if (scale != Vector3.One)
-                parts = parts.Select(p => PartRow.Transform(p, Matrix4x4.CreateScale(scale), Matrix4x4.Identity, p.MaterialSlot)).ToList();
-            // Items scale their visual (attach) only; their sprites sit on the root and keep their size.
-            var spriteScale = IsItem ? Vector3.One : scale;
-            parts.AddRange(Sprites.Where(s => !s.IsMissing).Select((s, i) =>
+            else
             {
-                var part = s.ToPart(SpriteRow.SlotBase + i);
-                return spriteScale == Vector3.One ? part : PartRow.Transform(part, Matrix4x4.CreateScale(spriteScale), Matrix4x4.Identity, part.MaterialSlot);
-            }));
+                // Items scale their visual (attach) only; their sprites sit on the root and keep their size.
+                var spriteScale = IsItem ? Vector3.One : scale;
+                parts.AddRange(Sprites.Where(s => !s.IsMissing).Select((s, i) =>
+                {
+                    var part = s.ToPart(SpriteRow.SlotBase + i);
+                    return spriteScale == Vector3.One ? part : PartRow.Transform(part, Matrix4x4.CreateScale(spriteScale), Matrix4x4.Identity, part.MaterialSlot);
+                }));
+            }
         }
 
         var sprites = Sprites.Where(s => !s.IsMissing).ToList();
@@ -868,6 +1093,10 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         var partRows = PartRows.ToList();
         Look = slot =>
         {
+            if (slot == Mannequin.Slot)
+                return new SlotLook(null, new Vector4(0.62f, 0.62f, 0.68f, 1f));
+            if (slot == Mannequin.FrontSlot)
+                return new SlotLook(null, new Vector4(0.95f, 0.55f, 0.15f, 1f));
             if (slot >= PartRow.SlotBase)
             {
                 var row = partRows.ElementAtOrDefault((slot - PartRow.SlotBase) / PartRow.SlotStride);
@@ -898,14 +1127,6 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
             return own == selected && selected != null ? look with { Highlight = true } : look;
         };
 
-        // The placed model (not worn, not compare) is what snap points belong to.
-        if (!worn && !CompareToBase)
-        {
-            var unscaled = SnapGeometry.Bounds(parts);
-            _shape = unscaled.IsEmpty ? unscaled : new Box(unscaled.Min / scale, unscaled.Max / scale);
-            ShapeText = _shape.IsEmpty ? "" : $"Model: {_shape.Size.X:0.##} wide × {_shape.Size.Y:0.##} tall × {_shape.Size.Z:0.##} deep (m)";
-        }
-
         UpdateSnapLabels();
         var markers = new List<Marker>();
         if (ShowSnapPoints || TabSnap)
@@ -919,7 +1140,16 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
 
         // Parts: a purple handle each on the Look tab, dragged like snap points.
         if (TabLook && !worn && !CompareToBase)
-            markers.AddRange(PartRows.Select((r, i) => new Marker(r.Position * scale, 0xFFB07CE8, 11, PartMarkerBase + i, "P" + (i + 1), r.IsSelected)));
+        {
+            var toParts = ViewTransforms().Parts;
+            markers.AddRange(PartRows.Select((r, i) => new Marker(Vector3.Transform(r.Position, toParts), 0xFFB07CE8, 11, PartMarkerBase + i, "P" + (i + 1), r.IsSelected)));
+        }
+
+        // Collision belongs to the placed/dropped model, not the held or worn one.
+        var showCollision = (ShowCollision || TabCollision) && !worn && !HeldView;
+        Wires = showCollision ? CollisionWires(CompareToBase) : null;
+        if (showCollision && TabCollision && CollisionBox && !CompareToBase)
+            markers.AddRange(BoxMarkers());
 
         Markers = markers;
     }
@@ -941,6 +1171,8 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         OnPropertyChanged(nameof(TabComponents));
         OnPropertyChanged(nameof(TabRecipe));
         OnPropertyChanged(nameof(TabSnap));
+        OnPropertyChanged(nameof(TabCollision));
+        OnPropertyChanged(nameof(HasRootMeshCollider));
         OnPropertyChanged(nameof(MarkerEditing));
         OnPropertyChanged(nameof(ViewportHint));
         Refresh();
@@ -1053,15 +1285,28 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         Recipe.Look.Mesh = ModelFile.Length > 0 ? new MeshSource { File = ModelFile }
             : MeshFrom.Length > 0 ? new MeshSource { Prefab = MeshFrom } : null;
         Recipe.Look.Icon = IconFile.Length > 0 ? IconFile : null;
+        Recipe.Look.IconPrefab = IconFile.Length == 0 && IconPrefab.Length > 0 ? IconPrefab : null;
+        Recipe.Look.IconTint = IconTint.Length > 0 && RecipeSerializer.TryParseColor(IconTint, out _) ? IconTint : null;
         Recipe.Look.Materials = Materials.Where(m => m.Part == null).Select(m => m.ToOverride()).Where(o => o != null).Select(o => o!).ToList();
         Recipe.Look.Parts = PartRows.Select(r => r.ToRecipe()).ToList();
         Recipe.Look.Scale = _modelScaleVector ?? new Vec3((float)Math.Round(Math.Max(ModelScale, 0.001), 4), (float)Math.Round(Math.Max(ModelScale, 0.001), 4), (float)Math.Round(Math.Max(ModelScale, 0.001), 4));
         Recipe.Look.Sprites = Sprites.Select(s => s.ToRecipe()).ToList();
         Recipe.Look.HideMesh = HideMesh;
-        Recipe.Look.HoldPosition = new Vec3(HoldX, HoldY, HoldZ);
-        Recipe.Look.HoldRotation = new Vec3(HoldRotX, HoldRotY, HoldRotZ);
-        Recipe.Look.HoldScale = IsItem ? new Vec3(HoldScale, HoldScale, HoldScale) : new Vec3(1, 1, 1);
+        Recipe.Look.HoldPosition = new Vec3(F(HoldX), F(HoldY), F(HoldZ));
+        Recipe.Look.HoldRotation = new Vec3(F(HoldRotX), F(HoldRotY), F(HoldRotZ));
+        Recipe.Look.HoldScale = IsItem ? new Vec3(S(HoldScaleX), S(HoldScaleY), S(HoldScaleZ)) : new Vec3(1, 1, 1);
         Recipe.Look.HideMeshes = MeshRows.Where(r => r.IsHidden).Select(r => r.Path).ToList();
+        Recipe.Look.Collision = CollisionMode switch
+        {
+            "box" => new CollisionRecipe
+            {
+                Mode = Format.CollisionMode.Box,
+                Center = new Vec3(_boxCenter.X, _boxCenter.Y, _boxCenter.Z),
+                Size = new Vec3(Math.Max(_boxSize.X, 0.01f), Math.Max(_boxSize.Y, 0.01f), Math.Max(_boxSize.Z, 0.01f))
+            },
+            "mesh" => new CollisionRecipe { Mode = Format.CollisionMode.Mesh },
+            _ => null
+        };
 
         Recipe.Fields = Components.Collect();
         Recipe.RemoveComponents = Components.RemovedNames.ToList();
@@ -1137,6 +1382,7 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         if (file == null || Pack == null)
             return;
         IconFile = Pack.AddFile(file, "textures");
+        IconPrefab = "";
         LoadIcon();
         ScheduleSave();
     }
@@ -1151,14 +1397,27 @@ public sealed partial class ItemEditorViewModel : ObservableObject, IMarkerEdito
         var relative = $"textures/{Recipe.Id}_icon.png";
         Images.SavePng(image, Pack.FullPath(relative)!);
         IconFile = relative;
+        IconPrefab = "";
         LoadIcon();
         ScheduleSave();
     }
 
     [RelayCommand]
+    private void ChooseIconFromPrefab() =>
+        _main.Workspace.Picker = new AssetPickerViewModel(_main, PickerMode.Icon, "Borrow an icon: pick a prefab whose icon to use",
+            (prefab, _) =>
+            {
+                IconPrefab = prefab;
+                IconFile = "";
+                LoadIcon();
+                ScheduleSave();
+            });
+
+    [RelayCommand]
     private void ResetIcon()
     {
         IconFile = "";
+        IconPrefab = "";
         LoadIcon();
         ScheduleSave();
     }

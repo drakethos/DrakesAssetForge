@@ -2,13 +2,19 @@ using System.Numerics;
 
 namespace DrakesForge.Valheim;
 
-/// <summary>How one material slot draws. Lets the editor preview tints and swapped materials without touching the model.</summary>
-public readonly record struct SlotLook(RgbaImage? Albedo, Vector4 Color, bool Highlight = false);
+/// <summary>
+/// How one material slot draws. Lets the editor preview tints and swapped materials without touching the model.
+/// <paramref name="Translucent"/> blends it by colour × texture alpha (glass) instead of drawing it solid.
+/// </summary>
+public readonly record struct SlotLook(RgbaImage? Albedo, Vector4 Color, bool Highlight = false, bool Translucent = false);
 
 /// <summary>
 /// A dot drawn over the model (snap points). Position is in Unity's axes, local to the prefab root.
 /// <paramref name="Id"/> ≥ 0 makes it draggable in the viewport; <paramref name="Label"/> is drawn beside it.
 /// </summary>
+/// <summary>An outline segment drawn over the model (collision shapes), in Unity space.</summary>
+public readonly record struct Wire(Vector3 A, Vector3 B, uint Argb);
+
 public readonly record struct Marker(Vector3 UnityPosition, uint Argb, int Size = 9, int Id = -1, string? Label = null, bool Selected = false);
 
 public sealed class OrbitCamera
@@ -87,9 +93,15 @@ public static class SoftwareRenderer
 
         var viewProj = ViewProjection(parts, camera, width, height, out _);
 
-        foreach (var part in parts)
+        // Solid parts first, then see-through ones blended over them (depth-tested, unsorted: a rough preview).
+        var looks = parts.Select(p => look(p.MaterialSlot)).ToArray();
+        foreach (var blend in new[] { false, true })
+        for (var pi = 0; pi < parts.Count; pi++)
         {
-            var slot = look(part.MaterialSlot);
+            var part = parts[pi];
+            var slot = looks[pi];
+            if (slot.Translucent != blend)
+                continue;
             var vertCount = part.Positions.Length / 3;
             var screen = new Vector4[vertCount];
             var shade = new float[vertCount];
@@ -213,6 +225,7 @@ public static class SoftwareRenderer
             var r = slot.Color.X;
             var g = slot.Color.Y;
             var bl = slot.Color.Z;
+            var alpha = slot.Translucent ? slot.Color.W : 1f;
             if (tex != null && uv.Length > 0)
             {
                 var u = c0 * uv[a * 2] + c1 * uv[b * 2] + c2 * uv[c * 2];
@@ -220,7 +233,9 @@ public static class SoftwareRenderer
                 var tx = (int)((u - MathF.Floor(u)) * tex.Width) % tex.Width;
                 var ty = (int)((1f - (v - MathF.Floor(v))) * tex.Height) % tex.Height;
                 var ti = (Math.Max(ty, 0) * tex.Width + Math.Max(tx, 0)) * 4;
-                if (tex.Bgra[ti + 3] < 64)
+                if (slot.Translucent)
+                    alpha *= tex.Bgra[ti + 3] / 255f;
+                else if (tex.Bgra[ti + 3] < 64)
                     continue; // alpha-cut foliage, chains, etc.
                 bl *= tex.Bgra[ti] / 255f;
                 g *= tex.Bgra[ti + 1] / 255f;
@@ -233,10 +248,22 @@ public static class SoftwareRenderer
                 r = r * 0.6f + 0.35f;
                 g = g * 0.6f + 0.22f;
                 bl *= 0.6f;
+                alpha = MathF.Max(alpha, 0.5f);
+            }
+
+            var o = idx * 4;
+            if (slot.Translucent)
+            {
+                // No depth write, so what's behind the glass still draws through it.
+                if (alpha < 0.004f)
+                    continue;
+                color[o] = ToByte(bl * light * alpha + color[o] / 255f * (1 - alpha));
+                color[o + 1] = ToByte(g * light * alpha + color[o + 1] / 255f * (1 - alpha));
+                color[o + 2] = ToByte(r * light * alpha + color[o + 2] / 255f * (1 - alpha));
+                continue;
             }
 
             depth[idx] = z;
-            var o = idx * 4;
             color[o] = ToByte(bl * light);
             color[o + 1] = ToByte(g * light);
             color[o + 2] = ToByte(r * light);
@@ -291,6 +318,6 @@ public static class SoftwareRenderer
             return new SlotLook(null, new Vector4(0.8f, 0.8f, 0.8f, 1f));
         var m = model.Materials[slot];
         var c = m.Info.Color;
-        return new SlotLook(m.Albedo, new Vector4(c[0], c[1], c[2], c[3]));
+        return new SlotLook(m.Albedo, new Vector4(c[0], c[1], c[2], c[3]), Translucent: m.Info.Translucent);
     }
 }

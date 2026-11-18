@@ -13,6 +13,7 @@ internal static class GameNames
     public const string GlowChild = "forge_glow";
     public const string SpritesChild = "forge_sprites";
     public const string PartsChild = "forge_parts";
+    public const string CollisionChild = "forge_collision";
 
     public static string? Station(string? name)
     {

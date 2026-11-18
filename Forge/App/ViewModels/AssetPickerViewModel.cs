@@ -12,7 +12,9 @@ public enum PickerMode
     /// <summary>Pick a prefab whose mesh to show.</summary>
     Mesh,
     /// <summary>Pick a chest/leg armour whose body look (the material painted on the player) to use.</summary>
-    ArmorLook
+    ArmorLook,
+    /// <summary>Pick a prefab whose icon to use.</summary>
+    Icon
 }
 
 /// <summary>
@@ -40,7 +42,7 @@ public sealed partial class AssetPickerViewModel : ObservableObject
     public PickerMode Mode { get; }
     public string Title { get; }
     public bool IsMaterialMode => Mode == PickerMode.Material;
-    public bool IsMeshMode => Mode == PickerMode.Mesh;
+    public bool IsMeshMode => Mode is PickerMode.Mesh or PickerMode.Icon;
     public bool IsArmorMode => Mode == PickerMode.ArmorLook;
     public string PickLabel => Mode switch { PickerMode.Material => "Use this material", PickerMode.Mesh => "Use this mesh", _ => "Use this body look" };
     public string Hint => Mode switch
@@ -67,6 +69,7 @@ public sealed partial class AssetPickerViewModel : ObservableObject
     {
         PickerMode.Material => SelectedMaterial != null,
         PickerMode.ArmorLook => Preview?.HasArmor == true,
+        PickerMode.Icon => Preview?.HasIcon == true,
         _ => true
     };
 

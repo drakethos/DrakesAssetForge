@@ -67,7 +67,11 @@
                         <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding Subtitle}" Classes="mono" />
                     </StackPanel>
-                    <Border Grid.Column="1" Classes="seg" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Button Classes="small ghost" Content="Export .glb" Command="{Binding ExportGlbCommand}"
+                            IsVisible="{Binding Parts, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            ToolTip.Tip="Save this model as a .glb for Blender (static meshes, colours, albedo textures)" />
+                    <Border Classes="seg" VerticalAlignment="Center">
                         <StackPanel Orientation="Horizontal">
                             <RadioButton Classes="seg" Content="Model" GroupName="pm" IsChecked="{Binding ModeModel, Mode=OneWay}"
                                          Command="{Binding $parent[UserControl].((vm:BrowseViewModel)DataContext).SetModeCommand}" CommandParameter="Model" />
@@ -77,6 +81,7 @@
                                          Command="{Binding $parent[UserControl].((vm:BrowseViewModel)DataContext).SetModeCommand}" CommandParameter="Icon" />
                         </StackPanel>
                     </Border>
+                    </StackPanel>
                 </Grid>
 
                 <Border DockPanel.Dock="Bottom" Classes="card" Margin="16" Padding="14">
@@ -89,6 +94,8 @@
                         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Stats}" />
                     </Grid>
                 </Border>
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding ExportStatus}" Classes="muted" Margin="16,0,16,6" TextWrapping="Wrap"
+                           IsVisible="{Binding ExportStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
                 <TextBlock DockPanel.Dock="Bottom" Text="{Binding Error}" Foreground="{StaticResource WarnBrush}" Margin="16,0" TextWrapping="Wrap"
                            IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
 

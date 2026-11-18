@@ -168,7 +168,7 @@ Borrowing (`from`, `mesh.prefab`) always takes the **vanilla** look, even if ano
 
 ## Not yet
 
-- `look.mesh.file` (.glb models): next runtime milestone (runtime glTF loader).
+- `look.mesh.file` (.glb models) loads in game (static meshes, base colour texture) but has no in-game test yet.
 - Restoring component fields on hot reload: a removed field keeps its last value until restart.
 - Item crafting recipes aren't read from vanilla yet (piece costs are); set item costs in the Recipe tab.
 - UI design canvas: https://claude.ai/artifact/W3avdoNYCwB8nNKHM9oLMs

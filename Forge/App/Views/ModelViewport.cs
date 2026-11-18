@@ -25,6 +25,10 @@ public sealed class ModelViewport : Control
     public static readonly StyledProperty<IReadOnlyList<Marker>?> MarkersProperty =
         AvaloniaProperty.Register<ModelViewport, IReadOnlyList<Marker>?>(nameof(Markers));
 
+    /// <summary>Outlines drawn on top of the model, not hidden behind it (collision boxes).</summary>
+    public static readonly StyledProperty<IReadOnlyList<Wire>?> WiresProperty =
+        AvaloniaProperty.Register<ModelViewport, IReadOnlyList<Wire>?>(nameof(Wires));
+
     public static readonly StyledProperty<string?> MessageProperty =
         AvaloniaProperty.Register<ModelViewport, string?>(nameof(Message));
 
@@ -58,7 +62,7 @@ public sealed class ModelViewport : Control
 
     static ModelViewport()
     {
-        AffectsRender<ModelViewport>(PartsProperty, LookProperty, MarkersProperty, MessageProperty, ConstraintProperty);
+        AffectsRender<ModelViewport>(PartsProperty, LookProperty, MarkersProperty, WiresProperty, MessageProperty, ConstraintProperty);
         PartsProperty.Changed.AddClassHandler<ModelViewport>((v, _) => v._dirty = true);
         LookProperty.Changed.AddClassHandler<ModelViewport>((v, _) => v._dirty = true);
         MarkersProperty.Changed.AddClassHandler<ModelViewport>((v, _) => v._dirty = true);
@@ -87,6 +91,12 @@ public sealed class ModelViewport : Control
     {
         get => GetValue(MarkersProperty);
         set => SetValue(MarkersProperty, value);
+    }
+
+    public IReadOnlyList<Wire>? Wires
+    {
+        get => GetValue(WiresProperty);
+        set => SetValue(WiresProperty, value);
     }
 
     public string? Message
@@ -141,6 +151,8 @@ public sealed class ModelViewport : Control
         }
 
         context.DrawImage(_bitmap, new Rect(0, 0, w, h));
+        if (_projection is { } wireProjection && Wires is { Count: > 0 } wires)
+            DrawWires(context, wireProjection, wires);
         if (_projection is { } projection && Markers is { Count: > 0 } markers)
         {
             if (_dragId >= 0 && Constraint is "x" or "y" or "z")
@@ -160,6 +172,20 @@ public sealed class ModelViewport : Control
         var formatted = new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, Typeface.Default, 11, LabelBrush);
         context.DrawRectangle(LabelBack, null, new Rect(at.X - 3, at.Y - 1, formatted.Width + 6, formatted.Height + 2), 3, 3);
         context.DrawText(formatted, at);
+    }
+
+    private readonly Dictionary<uint, IPen> _wirePens = new();
+
+    private void DrawWires(DrawingContext context, Projection projection, IReadOnlyList<Wire> wires)
+    {
+        foreach (var wire in wires)
+        {
+            if (projection.ToScreen(wire.A) is not { } a || projection.ToScreen(wire.B) is not { } b)
+                continue;
+            if (!_wirePens.TryGetValue(wire.Argb, out var pen))
+                _wirePens[wire.Argb] = pen = new Pen(new SolidColorBrush(Color.FromUInt32(wire.Argb)), 1.5);
+            context.DrawLine(pen, new Point(a.X, a.Y), new Point(b.X, b.Y));
+        }
     }
 
     /// <summary>A long line through the dragged point along the locked axis, in that axis' colour.</summary>

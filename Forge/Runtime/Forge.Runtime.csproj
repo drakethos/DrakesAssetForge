@@ -43,16 +43,44 @@
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(ForgeManagedDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
     <!-- Fire and glow effects. -->
     <Reference Include="UnityEngine.ParticleSystemModule" HintPath="$(ForgeManagedDir)\UnityEngine.ParticleSystemModule.dll" Private="false" />
+    <!-- look.collision. -->
+    <Reference Include="UnityEngine.PhysicsModule" HintPath="$(ForgeManagedDir)\UnityEngine.PhysicsModule.dll" Private="false" />
     <!-- Needed to resolve Jotunn's AssetBundle overloads even though Forge never loads bundles. -->
     <Reference Include="UnityEngine.AssetBundleModule" HintPath="$(ForgeManagedDir)\UnityEngine.AssetBundleModule.dll" Private="false" />
     <!-- Unity 6 modules are built against netstandard 2.1; net481 only ships the 2.0 facade. -->
     <Reference Include="netstandard" HintPath="$(ForgeManagedDir)\netstandard.dll" Private="false" />
   </ItemGroup>
 
-  <Target Name="DeployForgeRuntime" AfterTargets="Build" Condition="'$(ForgeRefsDir)' == '' and '$(BepInExPath)' != '' and Exists('$(BepInExPath)')">
-    <MakeDir Directories="$(BepInExPath)\plugins\$(ForgePluginFolder)" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExPath)\plugins\$(ForgePluginFolder)" SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="Deployed DrakesForgeRuntime to $(BepInExPath)\plugins\$(ForgePluginFolder)" />
+  <!-- Same package metadata as the runtime job in .github/workflows/release.yml. -->
+  <PropertyGroup>
+    <ForgeThunderstoreAuthor>DrakeMods</ForgeThunderstoreAuthor>
+    <ForgeThunderstoreName>DrakesForgeRuntime</ForgeThunderstoreName>
+    <ForgeDescription>Loads Forge packs: Valheim items, pieces and reskins made with Drakes Asset Forge, built from your own game files. No asset bundles.</ForgeDescription>
+    <ForgeDependencies>denikson-BepInExPack_Valheim-5.4.2351;ValheimModding-Jotunn-2.30.2</ForgeDependencies>
+    <ForgeR2ModProfileModScript>$(MSBuildThisFileDirectory)..\..\..\build\scripts\Update-R2ModProfileMod.ps1</ForgeR2ModProfileModScript>
+  </PropertyGroup>
+
+  <!-- Dev deploy like the suite mods: a full Thunderstore-style folder in the Gale and r2modman profiles, plus an r2modman mods.yml entry. -->
+  <Target Name="DeployForgeRuntime" AfterTargets="Build" Condition="'$(ForgeRefsDir)' == '' and '$(ProfileName)' != ''">
+    <ItemGroup>
+      <_ForgeDeployDir Include="$(GaleModPath)\$(ProfileName)\BepInEx\plugins\$(ForgePluginFolder)" Condition="'$(GaleModPath)' != '' and Exists('$(GaleModPath)\$(ProfileName)\BepInEx\plugins')" />
+      <_ForgeDeployDir Include="$(R2ModPath)\$(ProfileName)\BepInEx\plugins\$(ForgePluginFolder)" Condition="'$(R2ModPath)' != '' and Exists('$(R2ModPath)\$(ProfileName)\BepInEx\plugins')" />
+      <_ForgePackageFile Include="$(TargetPath);thunderstore\README.md;thunderstore\CHANGELOG.md;thunderstore\icon.png" />
+    </ItemGroup>
+    <PropertyGroup>
+      <_ForgeDepJson>&quot;$(ForgeDependencies.Replace(';', '&quot;, &quot;'))&quot;</_ForgeDepJson>
+      <_ForgeManifest>{&#xD;&#xA;    "name": "$(ForgeThunderstoreName)",&#xD;&#xA;    "version_number": "$(Version)",&#xD;&#xA;    "author": "$(ForgeThunderstoreAuthor)",&#xD;&#xA;    "description": "$(ForgeDescription)",&#xD;&#xA;    "website_url": "",&#xD;&#xA;    "dependencies": [ $(_ForgeDepJson) ]&#xD;&#xA;}</_ForgeManifest>
+      <_ForgeDescFile>$(IntermediateOutputPath)r2mod-description.txt</_ForgeDescFile>
+      <_ForgeR2ModsYml>$(R2ModPath)\$(ProfileName)\mods.yml</_ForgeR2ModsYml>
+    </PropertyGroup>
+    <MakeDir Directories="@(_ForgeDeployDir)" />
+    <Copy SourceFiles="@(_ForgePackageFile)" DestinationFolder="%(_ForgeDeployDir.Identity)" SkipUnchangedFiles="true" />
+    <WriteLinesToFile File="%(_ForgeDeployDir.Identity)\manifest.json" Lines="$(_ForgeManifest)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <Message Importance="high" Text="Deployed DrakesForgeRuntime to %(_ForgeDeployDir.Identity)" />
+
+    <WriteLinesToFile File="$(_ForgeDescFile)" Lines="$(ForgeDescription)" Overwrite="true" Condition="Exists('$(_ForgeR2ModsYml)') and Exists('$(ForgeR2ModProfileModScript)')" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ForgeR2ModProfileModScript)&quot; -ModsYmlPath &quot;$(_ForgeR2ModsYml)&quot; -AuthorName &quot;$(ForgeThunderstoreAuthor)&quot; -PackageName &quot;$(ForgeThunderstoreName)&quot; -DisplayName &quot;$(ForgeThunderstoreName)&quot; -Version &quot;$(Version)&quot; -DescriptionFile &quot;$(_ForgeDescFile)&quot; -Dependencies &quot;$(ForgeDependencies)&quot;"
+          Condition="Exists('$(_ForgeR2ModsYml)') and Exists('$(ForgeR2ModProfileModScript)')" />
   </Target>
 
   <!-- Debug builds also drop the sample pack into the push folder the runtime hot-reloads. -->

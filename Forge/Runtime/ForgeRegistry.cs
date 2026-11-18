@@ -113,6 +113,26 @@ internal sealed class ForgeRegistry
         {
             if (!_entries.TryGetValue(recipe.Id, out var entry))
             {
+                // A reskin needs no new id, so it can join a running game (this is how in-game editors add one).
+                if (recipe.Kind == RecipeKind.Reskin)
+                {
+                    try
+                    {
+                        if (Register(pack, recipe) && _entries.TryGetValue(recipe.Id, out var added))
+                        {
+                            if (added.Prefab != null)
+                                InstanceSync.Sync(added.Prefab);
+                            ForgeLog.Source.LogInfo($"{recipe.Id}: reskin added to the running game");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ForgeLog.Source.LogError($"{recipe.Id}: live add failed: {ex}");
+                    }
+
+                    continue;
+                }
+
                 ForgeLog.Source.LogWarning($"{recipe.Id}: new since launch. Restart the game to register it.");
                 continue;
             }
@@ -143,6 +163,26 @@ internal sealed class ForgeRegistry
             catch (Exception ex)
             {
                 ForgeLog.Source.LogError($"{recipe.Id}: reload failed: {ex}");
+            }
+        }
+
+        // A reskin whose file was deleted: put the vanilla item back (new ids can't be removed live, those wait for a restart).
+        var present = new HashSet<string>(pack.Recipes.Select(r => r.Id), StringComparer.OrdinalIgnoreCase);
+        foreach (var gone in _entries.Values.ToList())
+        {
+            if (gone.Recipe.Kind != RecipeKind.Reskin || present.Contains(gone.Recipe.Id) ||
+                !string.Equals(gone.Pack.Root, pack.Root, StringComparison.OrdinalIgnoreCase))
+                continue;
+            try
+            {
+                gone.Baseline.Restore(gone.Prefab);
+                _entries.Remove(gone.Recipe.Id);
+                InstanceSync.Sync(gone.Prefab);
+                ForgeLog.Source.LogInfo($"{gone.Recipe.Id}: reskin removed, back to vanilla");
+            }
+            catch (Exception ex)
+            {
+                ForgeLog.Source.LogError($"{gone.Recipe.Id}: revert failed: {ex}");
             }
         }
     }

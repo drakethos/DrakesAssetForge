@@ -5,9 +5,9 @@ using UnityEngine;
 namespace DrakesForge.Runtime;
 
 /// <summary>
-/// Snapshot of what Forge may change on a prefab (materials, renderer visibility, icons, snap points),
-/// so a hot reload can start from the untouched prefab. Component fields are not snapshotted:
-/// removing a field from a recipe keeps its last value until restart.
+/// Snapshot of what Forge may change on a prefab (materials, renderer visibility, icons, snap points, colliders),
+/// so a hot reload can start from the untouched prefab. Component fields a recipe sets are remembered
+/// by <see cref="FieldSetter"/> and put back here.
 /// </summary>
 internal sealed class LookBaseline
 {
@@ -23,6 +23,10 @@ internal sealed class LookBaseline
     private Vector3 _visualScale = Vector3.one;
     private Vector3 _visualPosition;
     private Quaternion _visualRotation = Quaternion.identity;
+    // The visual root's own children: the hold pose moves and turns them (see HoldPose).
+    private readonly List<(Transform Child, Vector3 Position, Quaternion Rotation)> _visualChildren = new();
+    // Solid colliders a collision setting switches off.
+    private readonly List<(Collider Collider, bool Enabled)> _colliders = new();
 
     public static LookBaseline Capture(GameObject prefab)
     {
@@ -46,6 +50,10 @@ internal sealed class LookBaseline
         baseline._visualScale = visual.localScale;
         baseline._visualPosition = visual.localPosition;
         baseline._visualRotation = visual.localRotation;
+        foreach (Transform child in visual)
+            baseline._visualChildren.Add((child, child.localPosition, child.localRotation));
+        foreach (var collider in Collision.BaseSolids(prefab))
+            baseline._colliders.Add((collider, collider.enabled));
         ByPrefab[prefab] = baseline;
         return baseline;
     }
@@ -78,11 +86,23 @@ internal sealed class LookBaseline
         DestroyChild(Parts.VisualRoot(prefab).gameObject, GameNames.VisualChild);
         DestroyChild(prefab, GameNames.GlowChild);
         DestroyChild(prefab, GameNames.SpritesChild);
+        DestroyChild(prefab, GameNames.CollisionChild);
+        FieldSetter.Restore(prefab);
+        foreach (var (collider, enabled) in _colliders)
+            if (collider != null)
+                collider.enabled = enabled;
         Parts.Remove(prefab);
         var visual = Parts.VisualRoot(prefab);
         visual.localPosition = _visualPosition;
         visual.localRotation = _visualRotation;
         visual.localScale = _visualScale;
+        foreach (var (child, position, rotation) in _visualChildren)
+        {
+            if (child == null)
+                continue;
+            child.localPosition = position;
+            child.localRotation = rotation;
+        }
         Effects.Restore(_effects);
 
         foreach (var (renderer, materials, enabled) in _renderers)

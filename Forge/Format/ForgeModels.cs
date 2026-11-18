@@ -71,6 +71,10 @@ public sealed class LookRecipe
     public List<MaterialOverride> Materials { get; set; } = new();
     /// <summary>Pack-relative PNG. Null keeps the base icon.</summary>
     public string? Icon { get; set; }
+    /// <summary>A vanilla prefab whose icon to use (look.iconFrom). Used when Icon is not set.</summary>
+    public string? IconPrefab { get; set; }
+    /// <summary>A colour multiplied over the icon (look.iconTint, "#RRGGBB"), like ReskinIt's icon tint.</summary>
+    public string? IconTint { get; set; }
     /// <summary>Flat images added to the model (signs, banners, decals, or a whole "paper" item).</summary>
     public List<SpriteRecipe> Sprites { get; set; } = new();
     /// <summary>Hide the base's own mesh, e.g. when sprites replace it. Colliders stay.</summary>
@@ -81,6 +85,8 @@ public sealed class LookRecipe
     public Vec3 Scale { get; set; } = new(1, 1, 1);
     /// <summary>Kitbashing: meshes borrowed from other vanilla prefabs, placed on this one.</summary>
     public List<PartRecipe> Parts { get; set; } = new();
+    /// <summary>What the placed/dropped model collides with. Null keeps the base's own colliders.</summary>
+    public CollisionRecipe? Collision { get; set; }
 
     public bool HasScale => Scale.X != 1 || Scale.Y != 1 || Scale.Z != 1;
 
@@ -93,7 +99,28 @@ public sealed class LookRecipe
         HoldRotation.X != 0 || HoldRotation.Y != 0 || HoldRotation.Z != 0 ||
         HoldScale.X != 1 || HoldScale.Y != 1 || HoldScale.Z != 1;
 
-    public bool IsEmpty => Mesh == null && Materials.Count == 0 && Icon == null && Sprites.Count == 0 && !HideMesh && HideMeshes.Count == 0 && !HasScale && Parts.Count == 0 && !HasHold;
+    public bool IsEmpty => Mesh == null && Materials.Count == 0 && Icon == null && Sprites.Count == 0 && !HideMesh && HideMeshes.Count == 0 && !HasScale && Parts.Count == 0 && !HasHold && IconPrefab == null && IconTint == null && Collision == null;
+}
+
+public enum CollisionMode
+{
+    /// <summary>The base's own colliders.</summary>
+    Base,
+    /// <summary>One box (<see cref="CollisionRecipe.Center"/>, <see cref="CollisionRecipe.Size"/>) instead of the base's colliders.</summary>
+    Box,
+    /// <summary>The visible model's own meshes instead of the base's colliders (convex on items, which have physics).</summary>
+    Mesh
+}
+
+/// <summary>
+/// Replaces the base's solid colliders (triggers stay). The box is local to the prefab root, in metres, before
+/// look.scale, like snap points; pieces scale it with the model, items (whose scale is on attach) don't.
+/// </summary>
+public sealed class CollisionRecipe
+{
+    public CollisionMode Mode { get; set; } = CollisionMode.Base;
+    public Vec3 Center { get; set; }
+    public Vec3 Size { get; set; } = new(1, 1, 1);
 }
 
 /// <summary>

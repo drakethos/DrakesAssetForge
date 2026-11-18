@@ -94,6 +94,22 @@ internal static class Screenshots
             await Settle(window, 800);
             Save(window, outDir, "3b-workspace-snap");
 
+            // Collision: the base's outlines, then a fitted box with its top face dragged down.
+            if (editor != null)
+                editor.Tab = "Collision";
+            await Settle(window, 600);
+            Save(window, outDir, "3g-collision-base");
+            if (editor != null)
+            {
+                editor.CollisionMode = "box";
+                var top = editor.Markers?.FirstOrDefault(m => m.Label == "top");
+                if (top is { } handle)
+                    editor.MoveMarker(handle.Id, handle.UnityPosition - new System.Numerics.Vector3(0, 0.5f, 0), "y");
+                Console.WriteLine($"collision box: centre ({editor.BoxCenterX}, {editor.BoxCenterY}, {editor.BoxCenterZ}) size ({editor.BoxSizeX}, {editor.BoxSizeY}, {editor.BoxSizeZ})");
+            }
+            await Settle(window, 600);
+            Save(window, outDir, "3h-collision-box");
+
             // Components: change WearNTear health and material type, then search.
             if (editor != null)
             {
@@ -296,12 +312,14 @@ internal static class Screenshots
             await Settle(window, 4000);
             if (vm.Workspace.Editor is { } hold)
             {
-                hold.HoldX = 0.05f;
-                hold.HoldY = -0.08f;
-                hold.HoldZ = 0.1f;
-                hold.HoldRotX = -30f;
-                hold.HoldRotY = 90f;
-                hold.HoldScale = 1.2f;
+                hold.HoldX = 0.05m;
+                hold.HoldY = -0.08m;
+                hold.HoldZ = 0.1m;
+                hold.HoldRotX = -30m;
+                hold.HoldRotY = 90m;
+                hold.HoldScaleX = 1.2m;
+                hold.HoldScaleY = 1m;
+                hold.HoldScaleZ = 0.8m;
                 await Settle(window, 2000);
                 Save(window, outDir, "11-hold-pose");
                 hold.SaveNow();

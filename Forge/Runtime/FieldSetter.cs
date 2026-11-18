@@ -32,7 +32,10 @@ internal static class FieldSetter
             {
                 try
                 {
-                    SetPath(target, field.Key.Split('.'), 0, field.Value);
+                    var path = field.Key.Split('.');
+                    Remember(prefab, target, path);
+                    var value = field.Value;
+                    SetPath(target, path, 0, type => Convert(value, type));
                 }
                 catch (Exception ex)
                 {
@@ -42,12 +45,61 @@ internal static class FieldSetter
         }
     }
 
+    // What each field a recipe has set held before, so a reload (or a deleted recipe) can put it back.
+    private static readonly Dictionary<GameObject, List<(Component Target, string[] Path, object? Value)>> Originals = new();
+
+    private static void Remember(GameObject prefab, Component target, string[] path)
+    {
+        if (!Originals.TryGetValue(prefab, out var list))
+            Originals[prefab] = list = new List<(Component, string[], object?)>();
+        if (list.Any(o => o.Target == target && o.Path.SequenceEqual(path)))
+            return;
+        object? current = target;
+        foreach (var name in path)
+        {
+            var step = current == null ? null : FindField(current.GetType(), name);
+            if (step != null)
+            {
+                current = step.GetValue(current);
+                continue;
+            }
+
+            // a property (Light.color): read it through the same name
+            var property = current?.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
+            if (property is not { CanRead: true })
+                return;
+            current = property.GetValue(current);
+        }
+
+        list.Add((target, path, current));
+    }
+
+    /// <summary>Puts every field a recipe has set on this prefab back to what it was before.</summary>
+    public static void Restore(GameObject prefab)
+    {
+        if (!Originals.TryGetValue(prefab, out var list))
+            return;
+        foreach (var (target, path, value) in list)
+        {
+            if (target == null)
+                continue;
+            try
+            {
+                SetPath(target, path, 0, _ => value);
+            }
+            catch (Exception ex)
+            {
+                ForgeLog.Source.LogWarning($"{prefab.name}: couldn't restore {string.Join(".", path)}: {ex.Message}");
+            }
+        }
+    }
+
     private static Component? FindComponent(GameObject prefab, string typeName) =>
         prefab.GetComponents<Component>().FirstOrDefault(c => c != null && c.GetType().Name == typeName)
         ?? prefab.GetComponentsInChildren<Component>(true).FirstOrDefault(c => c != null && c.GetType().Name == typeName);
 
     // Returns obj so a boxed struct can be assigned back to its parent field.
-    private static object SetPath(object obj, string[] path, int index, JsonValue value)
+    private static object SetPath(object obj, string[] path, int index, Func<Type, object?> value)
     {
         var field = FindField(obj.GetType(), path[index]);
         if (field == null && index == path.Length - 1)
@@ -56,7 +108,7 @@ internal static class FieldSetter
             var property = obj.GetType().GetProperty(path[index], BindingFlags.Instance | BindingFlags.Public);
             if (property is { CanWrite: true })
             {
-                property.SetValue(obj, Convert(value, property.PropertyType));
+                property.SetValue(obj, value(property.PropertyType));
                 return obj;
             }
         }
@@ -66,7 +118,7 @@ internal static class FieldSetter
 
         if (index == path.Length - 1)
         {
-            field.SetValue(obj, Convert(value, field.FieldType));
+            field.SetValue(obj, value(field.FieldType));
             return obj;
         }
 

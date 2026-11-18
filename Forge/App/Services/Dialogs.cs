@@ -25,6 +25,20 @@ public static class Dialogs
         return result.Count > 0 ? result[0].TryGetLocalPath() : null;
     }
 
+    public static async Task<string?> SaveFileAsync(string title, string suggestedName, string extension, string filterName)
+    {
+        if (Owner == null)
+            return null;
+        var result = await Owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            SuggestedFileName = suggestedName,
+            DefaultExtension = extension,
+            FileTypeChoices = new[] { new FilePickerFileType(filterName) { Patterns = new[] { "*." + extension } } }
+        });
+        return result?.TryGetLocalPath();
+    }
+
     public static async Task<string?> PickFileAsync(string title, string filterName, params string[] patterns)
     {
         if (Owner == null)

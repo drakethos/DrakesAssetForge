@@ -37,6 +37,8 @@ public sealed class GlbMaterial
     /// <summary>The base colour texture's file bytes (PNG or JPEG), or null.</summary>
     public byte[]? BaseColorImage { get; set; }
     public string? BaseColorMimeType { get; set; }
+    /// <summary>glTF alphaMode BLEND: the base colour's alpha is opacity (glass, water).</summary>
+    public bool Blend { get; set; }
 }
 
 public sealed class GlbModel
@@ -235,7 +237,8 @@ public static class GlbReader
                 Name = m["name"]?.AsString(),
                 BaseColor = baseColor,
                 BaseColorImage = image,
-                BaseColorMimeType = mime
+                BaseColorMimeType = mime,
+                Blend = m["alphaMode"]?.AsString() == "BLEND"
             };
         }
 

@@ -21,6 +21,8 @@ public static class AppSettings
     public static List<string> PinnedPushFolders { get; } = new();
     /// <summary>How many profiles Settings lists before "Show more".</summary>
     public static int PushListSize { get; set; } = 5;
+    /// <summary>Hold moves are typed and shown in centimetres (true) or metres (false). Stored in metres either way.</summary>
+    public static bool MoveInCentimetres { get; set; }
 
     public static void Load()
     {
@@ -37,6 +39,7 @@ public static class AppSettings
             // Files written before pushChosen existed only ever saved a folder when the user picked one.
             PushChosen = json["pushChosen"]?.AsBool() ?? PushFolder != null;
             PushListSize = (int)(json["pushListSize"]?.AsNumber() ?? PushListSize);
+            MoveInCentimetres = json["moveInCm"]?.AsBool() ?? false;
             PinnedPushFolders.Clear();
             foreach (var pin in json["pinnedPushFolders"]?.Items ?? Array.Empty<JsonValue>())
                 if (pin.AsString() is { } folder)
@@ -71,6 +74,7 @@ public static class AppSettings
                 json.Set("pushLabel", PushLabel);
             json.Set("pushChosen", PushChosen);
             json.Set("pushListSize", PushListSize);
+            json.Set("moveInCm", MoveInCentimetres);
             var pins = JsonValue.NewArray();
             foreach (var pin in PinnedPushFolders)
                 pins.Add(pin);

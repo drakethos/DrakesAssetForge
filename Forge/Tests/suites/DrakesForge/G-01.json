@@ -1,0 +1,12 @@
+{
+  "name": "G-01 look.mesh.file: a pack's .glb replaces the base mesh and keeps its texture",
+  "description": "GlbSample's forge_glb_sword is built from SwordBronze with models/sword.glb as its mesh. The glb part draws (one part, 304 triangles, textured), the vanilla blade is off, and the item can be given and held.",
+  "steps": [
+    { "do": "hook", "name": "forge.drawReport", "args": { "prefab": "forge_glb_sword" }, "contains": "glbParts=1;tris=304;textured=1;vanilla=0", "label": "glb part drawn, textured, vanilla mesh off", "stop": true },
+    { "do": "give", "prefab": "forge_glb_sword" },
+    { "do": "check", "check": "hasItem", "prefab": "forge_glb_sword", "label": "the item is in the inventory" },
+    { "do": "wait", "seconds": 0.5 },
+    { "do": "screenshot", "label": "inventory with the glb sword" }
+  ],
+  "asserts": [ { "check": "noErrors", "source": "DrakesForgeRuntime" } ]
+}
